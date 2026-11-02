@@ -1,0 +1,147 @@
+[
+  {
+    "id": "user_1793166046963_lmzr",
+    "username": "testuser2026",
+    "email": "hung.test@taskmaster.vn",
+    "password": "password123",
+    "authProvider": "password",
+    "isProfileCompleted": true,
+    "syncCode": "TM-9UYG",
+    "profile": {
+      "displayName": "Nguyễn Văn Hưng",
+      "role": "",
+      "units": [],
+      "birthDate": "1995-01-01",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=testuser2026",
+      "email": "hung.test@taskmaster.vn",
+      "phone": "",
+      "weeklyGoal": 3,
+      "notifications": {
+        "browserEnabled": true,
+        "soundEnabled": true,
+        "priorityReminders": true,
+        "overdueAlerts": true
+      },
+      "connectedAppsList": []
+    },
+    "createdAt": "2026-10-28T05:40:46.963Z",
+    "lastActiveAt": "2026-10-28T05:45:06.758Z",
+    "lastSyncedAt": "2026-10-28T05:45:06.758Z"
+  },
+  {
+    "id": "user_1793167152660_yqn0",
+    "username": "canbo_nguyen",
+    "email": "canbo_nguyen@domain.vn",
+    "password": "Matkhau123!",
+    "authProvider": "password",
+    "isProfileCompleted": true,
+    "syncCode": "TM-2UQ3",
+    "profile": {
+      "displayName": "Nguyễn Văn Tuấn",
+      "role": "",
+      "units": [],
+      "birthDate": "1995-01-01",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=canbo_nguyen",
+      "email": "canbo_nguyen@domain.vn",
+      "phone": "",
+      "weeklyGoal": 3,
+      "notifications": {
+        "browserEnabled": true,
+        "soundEnabled": true,
+        "priorityReminders": true,
+        "overdueAlerts": true
+      },
+      "connectedAppsList": []
+    },
+    "createdAt": "2026-10-28T05:59:12.660Z",
+    "lastActiveAt": "2026-10-28T05:59:24.933Z",
+    "lastSyncedAt": "2026-10-28T05:59:12.660Z"
+  },
+  {
+    "id": "user_1793316211178_hcya",
+    "username": "canbo_demo",
+    "email": "canbo_demo@test.com",
+    "password": "Password123!",
+    "authProvider": "password",
+    "isProfileCompleted": true,
+    "syncCode": "TM-7HKV",
+    "profile": {
+      "displayName": "Nguyễn Văn Tuấn",
+      "role": "",
+      "units": [],
+      "birthDate": "1995-01-01",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=canbo_demo",
+      "email": "canbo_demo@test.com",
+      "phone": "",
+      "weeklyGoal": 3,
+      "notifications": {
+        "browserEnabled": true,
+        "soundEnabled": true,
+        "priorityReminders": true,
+        "overdueAlerts": true
+      },
+      "connectedAppsList": []
+    },
+    "createdAt": "2026-10-29T23:23:31.178Z",
+    "lastActiveAt": "2026-10-29T23:23:31.178Z",
+    "lastSyncedAt": "2026-10-29T23:23:31.178Z"
+  },
+  {
+    "id": "user_1793316291529_xgj8",
+    "username": "nguyenvana",
+    "email": "nguyenvanan@test.vn",
+    "password": "Password123!",
+    "authProvider": "password",
+    "isProfileCompleted": true,
+    "syncCode": "TM-HLVQ",
+    "profile": {
+      "displayName": "Nguyễn Văn An",
+      "role": "",
+      "units": [],
+      "birthDate": "1995-01-01",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=nguyenvana",
+      "email": "nguyenvanan@test.vn",
+      "phone": "",
+      "weeklyGoal": 3,
+      "notifications": {
+        "browserEnabled": true,
+        "soundEnabled": true,
+        "priorityReminders": true,
+        "overdueAlerts": true
+      },
+      "connectedAppsList": []
+    },
+    "createdAt": "2026-10-29T23:24:51.529Z",
+    "lastActiveAt": "2026-10-30T10:46:26.678Z",
+    "lastSyncedAt": "2026-10-29T23:24:51.529Z"
+  },
+  {
+    "id": "user_1793370279625_u6ak",
+    "username": "demo_user",
+    "email": "demo@taskmaster.vn",
+    "password": "password123",
+    "authProvider": "password",
+    "isProfileCompleted": true,
+    "syncCode": "TM-FUDB",
+    "profile": {
+      "displayName": "Nguyễn Văn Tuấn",
+      "role": "",
+      "units": [],
+      "birthDate": "1995-01-01",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=demo_user",
+      "email": "demo@taskmaster.vn",
+      "phone": "",
+      "weeklyGoal": 3,
+      "notifications": {
+        "browserEnabled": true,
+        "soundEnabled": true,
+        "priorityReminders": true,
+        "overdueAlerts": true
+      },
+      "connectedAppsList": []
+    },
+    "createdAt": "2026-10-30T14:24:39.625Z",
+    "lastActiveAt": "2026-10-30T14:24:55.091Z",
+    "lastSyncedAt": "2026-10-30T14:24:39.625Z"
+  }
+]
