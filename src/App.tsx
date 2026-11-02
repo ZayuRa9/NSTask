@@ -12,7 +12,6 @@ import { AuthView } from './components/AuthView';
 import { CalendarSyncModal } from './components/CalendarSyncModal';
 import { WordExcelImportModal } from './components/WordExcelImportModal';
 import { DocumentManagerView } from './components/DocumentManagerView';
-import { VoiceTaskModal } from './components/VoiceTaskModal';
 import { ReportExportModal } from './components/ReportExportModal';
 import { Task, UserProfile, UserAccount, Note, ExternalCalendarEvent, TaskTimeframeFilter } from './types/task';
 import {
@@ -262,7 +261,6 @@ export default function App() {
   // 3.6. Google Calendar Sync & Word/Excel Batch Import State
   const [isCalendarSyncModalOpen, setIsCalendarSyncModalOpen] = useState(false);
   const [isWordExcelImportModalOpen, setIsWordExcelImportModalOpen] = useState(false);
-  const [isVoiceTaskModalOpen, setIsVoiceTaskModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [externalCalendarEvents, setExternalCalendarEvents] = useState<ExternalCalendarEvent[]>([]);
   const [calendarSyncState, setCalendarSyncState] = useState(() => getStoredSyncState());
@@ -1188,7 +1186,6 @@ export default function App() {
         onLogout={handleLogout}
         onOpenCalendarSync={() => setIsCalendarSyncModalOpen(true)}
         isCalendarConnected={calendarSyncState.isConnected}
-        onOpenVoiceTask={() => setIsVoiceTaskModalOpen(true)}
         onOpenReportModal={() => setIsReportModalOpen(true)}
       />
 
@@ -1208,7 +1205,6 @@ export default function App() {
             onEditTask={handleEditTask}
             onOpenCalendarSync={() => setIsCalendarSyncModalOpen(true)}
             onOpenWordExcelImport={() => setIsWordExcelImportModalOpen(true)}
-            onOpenVoiceTask={() => setIsVoiceTaskModalOpen(true)}
             onOpenReportModal={() => setIsReportModalOpen(true)}
           />
         )}
@@ -1407,14 +1403,6 @@ export default function App() {
         }}
         defaultUnit={userProfile.units[0]}
         availableUnits={userProfile.units}
-      />
-
-      {/* Voice Task AI Gemini Modal */}
-      <VoiceTaskModal
-        isOpen={isVoiceTaskModalOpen}
-        onClose={() => setIsVoiceTaskModalOpen(false)}
-        onSaveTask={handleSaveTask}
-        userProfile={userProfile}
       />
 
       {/* Word Report (.docx) & Custom Template Modal */}

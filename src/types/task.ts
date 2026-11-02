@@ -457,25 +457,6 @@ export interface DocumentTableStructure {
 
 /**
  * -----------------------------------------------------------------------------
- * Voice Task Gemini AI Types
- * -----------------------------------------------------------------------------
- */
-export interface VoiceTaskAnalysisResult {
-  transcript: string;
-  title: string;
-  description: string;
-  dueDate?: string | null;
-  dueTime?: string | null;
-  priority: TaskPriority;
-  unit?: string | null;
-  subtasks: string[];
-  missingFields: string[];
-  keywords?: string[];
-  tags?: string[];
-}
-
-/**
- * -----------------------------------------------------------------------------
  * Word Report & Custom Template Types
  * -----------------------------------------------------------------------------
  */

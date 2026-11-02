@@ -2956,12 +2956,11 @@ ${textSample}`;
  * 5.5 GHI ÂM VÀ TẠO NHIỆM VỤ BẰNG AI GEMINI (Audio-to-Task)
  * =========================================================================
  */
-app.post('/api/ai/voice-task', async (req: Request, res: Response) => {
-  try {
-    const { audioBase64, textPrompt, mimeType = 'audio/webm', nowIso, timeZone = 'Asia/Ho_Chi_Minh', units = [] } = req.body;
-    if (!audioBase64 && !textPrompt) {
-      return res.status(400).json({ error: 'Không nhận được dữ liệu âm thanh hoặc văn bản' });
-    }
+app.post('/api/ai/voice-task', async (_req: Request, res: Response) => {
+  return res.status(404).json({ error: 'Chức năng ghi âm AI đã được gỡ bỏ khỏi hệ thống' });
+});
+
+/* [REMOVED VOICE TASK ROUTE]
 
     if (!ai) {
       return res.status(500).json({ error: 'Gemini AI chưa được cấu hình khóa API' });
@@ -3154,6 +3153,7 @@ Phản hồi dưới định dạng JSON duy nhất.`;
     });
   }
 });
+*/
 
 /**
  * =========================================================================

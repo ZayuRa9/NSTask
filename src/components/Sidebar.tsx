@@ -16,7 +16,6 @@ import {
   LogOut,
   Folder,
   Calendar,
-  Mic,
   FileText,
   Menu,
   X,
@@ -48,7 +47,6 @@ interface SidebarProps {
   onLogout: () => void;
   onOpenCalendarSync?: () => void;
   isCalendarConnected?: boolean;
-  onOpenVoiceTask?: () => void;
   onOpenReportModal?: () => void;
 }
 
@@ -72,7 +70,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onOpenCalendarSync,
   isCalendarConnected,
-  onOpenVoiceTask,
   onOpenReportModal,
 }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -296,23 +293,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {isCalendarConnected && (
                 <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
               )}
-            </button>
-          )}
-
-          {/* Voice AI Button */}
-          {onOpenVoiceTask && (
-            <button
-              onClick={() => {
-                onOpenVoiceTask();
-                setIsMobileOpen(false);
-              }}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-rose-200 bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/50 transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Mic className="w-4 h-4 text-rose-400 shrink-0 animate-pulse" />
-                <span className="truncate">Ghi âm AI</span>
-              </div>
-              <Sparkles className="w-3.5 h-3.5 text-rose-400" />
             </button>
           )}
 

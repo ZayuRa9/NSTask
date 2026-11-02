@@ -29,7 +29,6 @@ import {
   StickyNote,
   Pin,
   FileSpreadsheet,
-  Mic,
   FileText
 } from 'lucide-react';
 import {
@@ -94,7 +93,6 @@ interface DashboardOverviewProps {
   onEditTask: (task: Task) => void;
   onOpenCalendarSync?: () => void;
   onOpenWordExcelImport?: () => void;
-  onOpenVoiceTask?: () => void;
   onOpenReportModal?: () => void;
   onUpdateWeeklyGoal?: (goal: number) => void;
 }
@@ -112,7 +110,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onEditTask,
   onOpenCalendarSync,
   onOpenWordExcelImport,
-  onOpenVoiceTask,
   onOpenReportModal,
   onUpdateWeeklyGoal,
 }) => {
@@ -340,8 +337,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       </div>
 
-      {/* HÀNG 2: 6 NHÓM CHỨC NĂNG PHÂN BỔ ĐỀU 6 CỘT ĐỒNG NHẤT VỚI MÀU SẮC ĐẶC TRƯNG */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 w-full">
+      {/* HÀNG 2: 5 NHÓM CHỨC NĂNG PHÂN BỔ ĐỀU 5 CỘT ĐỒNG NHẤT VỚI MÀU SẮC ĐẶC TRƯNG */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 w-full">
         {/* 1. Google Lịch */}
         <button
           type="button"
@@ -388,30 +385,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </button>
 
-        {/* 3. Ghi âm AI */}
-        <button
-          type="button"
-          onClick={onOpenVoiceTask}
-          className="flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl border-2 border-rose-200/90 bg-gradient-to-br from-rose-50/90 via-white to-pink-50/70 hover:border-rose-400 hover:shadow-md text-left transition-all duration-200 group cursor-pointer active:scale-98 shadow-xs"
-          title="Ghi âm tạo nhiệm vụ bằng giọng nói"
-        >
-          <div className="flex items-center justify-between w-full">
-            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <Mic className="w-4.5 h-4.5" />
-            </div>
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse ring-2 ring-rose-200" />
-          </div>
-          <div className="mt-3">
-            <div className="font-extrabold text-xs sm:text-sm text-slate-900 group-hover:text-rose-700 transition-colors">
-              Ghi âm AI
-            </div>
-            <p className="text-[11px] text-rose-700/80 font-medium line-clamp-1 mt-0.5">
-              Tạo việc giọng nói
-            </p>
-          </div>
-        </button>
-
-        {/* 4. Báo cáo Word */}
+        {/* 3. Báo cáo Word */}
         <button
           type="button"
           onClick={onOpenReportModal}
@@ -434,7 +408,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </button>
 
-        {/* 5. Ghi chú */}
+        {/* 4. Ghi chú */}
         <button
           type="button"
           onClick={() => onNavigateToNotes && onNavigateToNotes()}
@@ -459,7 +433,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </button>
 
-        {/* 6. Tạo việc mới */}
+        {/* 5. Tạo việc mới */}
         <button
           type="button"
           onClick={() => onOpenCreateModal()}

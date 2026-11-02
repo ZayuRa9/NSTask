@@ -16,7 +16,6 @@ import {
   Link2,
   Folder,
   Calendar,
-  Mic,
   FileText
 } from 'lucide-react';
 import { UserProfile, UserAccount } from '../types/task';
@@ -44,7 +43,6 @@ interface NavbarProps {
   onLogout: () => void;
   onOpenCalendarSync?: () => void;
   isCalendarConnected?: boolean;
-  onOpenVoiceTask?: () => void;
   onOpenReportModal?: () => void;
 }
 
@@ -68,7 +66,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   onOpenCalendarSync,
   isCalendarConnected,
-  onOpenVoiceTask,
   onOpenReportModal,
 }) => {
   const handleTestChime = () => {
@@ -218,19 +215,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-2">
-            {/* Voice Task AI Gemini Button */}
-            {onOpenVoiceTask && (
-              <button
-                type="button"
-                onClick={onOpenVoiceTask}
-                title="Ghi âm tạo nhiệm vụ bằng Gemini AI (Giọng nói tự nhiên)"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 hover:shadow-xs transition-all cursor-pointer"
-              >
-                <Mic className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-                <span className="hidden sm:inline">Ghi âm AI</span>
-              </button>
-            )}
-
             {/* Word Report Button */}
             {onOpenReportModal && (
               <button
