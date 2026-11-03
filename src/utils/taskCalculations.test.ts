@@ -20,7 +20,10 @@ import {
   getTimeframeCounts,
   getTaskTimeframeBadge,
   calculateWeeklyPerformanceTrend,
-  calculate30DaysCreationVsCompletionTrend
+  calculate30DaysCreationVsCompletionTrend,
+  getSafeTaskLeadDurationMs,
+  calculateDailyPerformanceSummary,
+  calculateWeeklyProductivityTrend
 } from './taskCalculations.ts';
 import { Task, Subtask, TaskTimeframeFilter } from '../types/task.ts';
 
@@ -776,5 +779,89 @@ test('calculate30DaysCreationVsCompletionTrend calculates 30 daily points and ag
   const weekly = calculate30DaysCreationVsCompletionTrend(sampleTasks as unknown as Task[], ref, 'weekly');
   assert.equal(weekly.dataPoints.length, 4);
 });
+
+test('getSafeTaskLeadDurationMs safely prevents epoch 1970 bugs and bounds realistic hours', () => {
+  const oneHourMs = 3600000;
+  const compTime = new Date('2026-11-03T10:00:00Z').getTime();
+
+  // Test 1: Corrupted or missing createdAt (must not return 62,321 hours)
+  const taskCorrupted = { createdAt: '1970-01-01T00:00:00Z', completedAt: '2026-11-03T10:00:00Z' };
+  const dur1 = getSafeTaskLeadDurationMs(taskCorrupted, compTime);
+  const hours1 = dur1 / oneHourMs;
+  assert.ok(hours1 <= 720, 'Must clamp to maximum realistic hours');
+  assert.ok(hours1 >= 0.5, 'Must be at least 0.5 hours');
+  assert.ok(hours1 < 100, 'Should fall back to realistic 24-72 hours, never thousands');
+
+  // Test 2: Valid normal task
+  const taskNormal = { createdAt: '2026-11-02T10:00:00Z', completedAt: '2026-11-03T10:00:00Z' };
+  const durNormal = getSafeTaskLeadDurationMs(taskNormal, compTime);
+  assert.equal(durNormal / oneHourMs, 24);
+
+  // Test 3: Same-time completion (minimum 0.5 hours)
+  const taskInstant = { createdAt: '2026-11-03T10:00:00Z', completedAt: '2026-11-03T10:00:00Z' };
+  const durInstant = getSafeTaskLeadDurationMs(taskInstant, compTime);
+  assert.equal(durInstant / oneHourMs, 0.5);
+});
+
+test('calculateDailyPerformanceSummary accurately calculates today vs yesterday metrics', () => {
+  const ref = new Date('2026-11-03T12:00:00Z');
+  const sampleTasks: Task[] = [
+    {
+      id: 'today-1',
+      title: 'Created and completed today on time',
+      unit: 'Ban Thanh Niên',
+      createdAt: '2026-11-03T08:00:00Z',
+      dueDate: '2026-11-03T17:00:00Z',
+      completedAt: '2026-11-03T11:00:00Z',
+      status: 'completed',
+      priority: 'high',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 }
+    },
+    {
+      id: 'today-2',
+      title: 'Created today, pending',
+      unit: 'Chi hội 1',
+      createdAt: '2026-11-03T09:00:00Z',
+      dueDate: '2026-11-05T17:00:00Z',
+      status: 'in_progress',
+      priority: 'medium',
+      progress: 20,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 }
+    },
+    {
+      id: 'yest-1',
+      title: 'Created yesterday',
+      unit: 'Ban Thanh Niên',
+      createdAt: '2026-11-02T08:00:00Z',
+      dueDate: '2026-11-04T17:00:00Z',
+      completedAt: '2026-11-02T16:00:00Z',
+      status: 'completed',
+      priority: 'low',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 }
+    }
+  ];
+
+  const summary = calculateDailyPerformanceSummary(sampleTasks, ref);
+  assert.equal(summary.createdToday, 2);
+  assert.equal(summary.completedToday, 1);
+  assert.equal(summary.createdYesterday, 1);
+  assert.equal(summary.completedYesterday, 1);
+  assert.equal(summary.netCreatedDiff, 1);
+  assert.equal(summary.todayOnTimeRate, 100);
+  assert.ok(summary.avgHoursToday > 0);
+  assert.ok(summary.todayStatusMessage.length > 0);
+});
+
 
 

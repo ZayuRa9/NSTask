@@ -57,6 +57,8 @@ import {
   calculateMonthlyTrend,
   calculateWeeklyProductivityTrend,
   calculateMonthlyProductivityTrend,
+  calculateDailyProductivityTrend,
+  calculateDailyPerformanceSummary,
   calculateWeeklyPerformanceTrend,
   calculate30DaysCreationVsCompletionTrend,
   ProductivityTrendPoint,
@@ -118,7 +120,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     userProfile.displayName || 'default_user'
   );
   const [trendPeriod, setTrendPeriod] = useState<'weekly' | 'monthly'>('weekly');
-  const [productivityPeriod, setProductivityPeriod] = useState<'weekly' | 'monthly'>('weekly');
+  const [productivityPeriod, setProductivityPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [productivityMetricUnit, setProductivityMetricUnit] = useState<'hours' | 'days'>('hours');
   const [productivityChartType, setProductivityChartType] = useState<'productivity' | 'flow' | 'line'>('productivity');
   const [performanceWeekCount, setPerformanceWeekCount] = useState<4 | 6 | 8 | 12>(6);
@@ -221,17 +223,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const trendData = productivityPeriod === 'weekly' ? weeklyData : monthlyData;
 
   // Recharts productivity trend data (Số lượng hoàn thành & Thời gian thực hiện)
+  const dailyProdData = useMemo(() => calculateDailyProductivityTrend(tasks), [tasks]);
   const weeklyProdData = useMemo(() => calculateWeeklyProductivityTrend(tasks), [tasks]);
   const monthlyProdData = useMemo(() => calculateMonthlyProductivityTrend(tasks), [tasks]);
-  const currentProdData = productivityPeriod === 'weekly' ? weeklyProdData : monthlyProdData;
+  const currentProdData = productivityPeriod === 'daily' ? dailyProdData : (productivityPeriod === 'weekly' ? weeklyProdData : monthlyProdData);
+
+  const dailySummary = useMemo(() => calculateDailyPerformanceSummary(tasks), [tasks]);
 
   const prodSummary = useMemo(() => {
     const totalDone = currentProdData.reduce((s, p) => s + p.completedTasks, 0);
-    const totalHours = currentProdData.reduce((s, p) => s + p.totalExecutionHours, 0);
+    const rawTotalHours = currentProdData.reduce((s, p) => s + p.totalExecutionHours, 0);
+    const totalHours = Number(rawTotalHours.toFixed(1));
     const totalOnTime = currentProdData.reduce((s, p) => s + p.onTimeCount, 0);
     const totalCreated = currentProdData.reduce((s, p) => s + p.createdTasks, 0);
-    const avgHours = totalDone > 0 ? +(totalHours / totalDone).toFixed(1) : 0;
-    const avgDays = +(avgHours / 24).toFixed(1);
+    const avgHours = totalDone > 0 ? Number((totalHours / totalDone).toFixed(1)) : 0;
+    const avgDays = Number((avgHours / 24).toFixed(1));
     const onTimeRate = totalDone > 0 ? Math.round((totalOnTime / totalDone) * 100) : 100;
 
     return {
@@ -2025,7 +2031,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          {/* RECHARTS: BIỂU ĐỒ THỐNG KÊ XU HƯỚNG NĂNG SUẤT (HOÀN THÀNH & THỜI GIAN THỰC HIỆN) */}
+            {/* RECHARTS: BIỂU ĐỒ THỐNG KÊ XU HƯỚNG NĂNG SUẤT (HOÀN THÀNH & THỜI GIAN THỰC HIỆN) */}
           <div className="bg-white/95 p-6 sm:p-7 rounded-3xl border-2 border-violet-200/90 border-t-4 border-t-violet-600 shadow-xs space-y-5">
             {/* Header with Title and Mode Controls */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-violet-100">
@@ -2036,11 +2042,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   </div>
                   <div>
                     <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-                      Báo Cáo Hiệu Suất Tuần
+                      {productivityPeriod === 'daily'
+                        ? 'Báo Cáo Hiệu Suất Ngày'
+                        : productivityPeriod === 'weekly'
+                        ? 'Báo Cáo Hiệu Suất Tuần'
+                        : 'Báo Cáo Hiệu Suất Tháng'}
                       <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-800 border border-violet-300">
-                        7 Ngày
+                        {productivityPeriod === 'daily'
+                          ? 'Hôm nay & Ngày qua'
+                          : productivityPeriod === 'weekly'
+                          ? '7 Ngày'
+                          : '6 Tháng'}
                       </span>
                     </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {productivityPeriod === 'daily'
+                        ? 'Theo dõi chi tiết số nhiệm vụ tạo mới, tiến độ hoàn thành và thời gian xử lý hôm nay so với các ngày qua'
+                        : productivityPeriod === 'weekly'
+                        ? 'Đo lường xu hướng năng suất và thời lượng xử lý thực tế qua 7 ngày trong tuần'
+                        : 'Tổng hợp nhịp độ hoàn thành công việc và thời gian xử lý qua 6 tháng liên tiếp'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -2087,8 +2108,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   </button>
                 </div>
 
-                {/* Period Selector: Week / Month */}
+                {/* Period Selector: Day / Week / Month */}
                 <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setProductivityPeriod('daily')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      productivityPeriod === 'daily'
+                        ? 'bg-violet-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Theo Ngày (Hôm nay)
+                  </button>
                   <button
                     type="button"
                     onClick={() => setProductivityPeriod('weekly')}
@@ -2205,6 +2237,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-purple-800/80 font-medium mt-1">Đưa vào luồng xử lý</p>
+              </div>
+            </div>
+
+            {/* Daily Contextual Comparison Banner (Active when viewing daily report or as an overview) */}
+            <div className="p-3.5 rounded-2xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/80 via-blue-50/60 to-violet-50/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <CalendarDays className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-black text-slate-900 flex items-center gap-2 flex-wrap">
+                    <span>Hiệu suất công tác ngày: Hôm nay vs Ngày qua</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      Hôm nay tạo mới: {dailySummary.createdToday} việc (Hôm qua: {dailySummary.createdYesterday} việc)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-indigo-900/80 font-medium mt-0.5">
+                    {dailySummary.todayStatusMessage}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                <span className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white border border-indigo-200 text-indigo-900 shadow-2xs">
+                  Đã xong hôm nay: <strong className="text-emerald-700">{dailySummary.completedToday}</strong> việc
+                </span>
               </div>
             </div>
 

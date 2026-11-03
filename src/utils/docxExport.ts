@@ -11,7 +11,7 @@ import {
   AlignmentType,
   convertMillimetersToTwip,
 } from 'docx';
-import { Task, UserProfile } from '../types/task';
+import { Task, UserProfile, ReportStatistics, WordReportCustomConfig } from '../types/task';
 import { formatDateVietnamese } from './taskCalculations';
 
 /**
@@ -93,6 +93,161 @@ export function createAdminParagraph(
         bold: Boolean(options.bold),
         italics: Boolean(options.italics),
         color: '000000',
+      }),
+    ],
+  });
+}
+
+/**
+ * Creates a visual ASCII / block meter bar for Word reports (e.g., ██████████░░ 80%)
+ */
+export function createVisualBar(ratePercent: number, totalChars = 16): string {
+  const safePercent = Math.max(0, Math.min(100, Math.round(ratePercent || 0)));
+  const filledCount = Math.round((safePercent / 100) * totalChars);
+  const emptyCount = Math.max(0, totalChars - filledCount);
+  return '█'.repeat(filledCount) + '░'.repeat(emptyCount) + ` ${safePercent}%`;
+}
+
+/**
+ * Builds a standardized Representative Overview & Progress Chart Table for DOCX
+ */
+export function createOverviewMetricsChartTable(stats: ReportStatistics): Table {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: tableBorderCell,
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          new TableCell({
+            width: { size: 40, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Chỉ số tổng quan đại diện', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Số lượng thực tế', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 40, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Biểu đồ tiến độ & Tỷ lệ đại diện', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: '1. Tổng nhiệm vụ tiếp nhận', font: 'Times New Roman', bold: true, size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: `${stats.totalTasks} việc`, font: 'Times New Roman', bold: true, size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: createVisualBar(100), font: 'Times New Roman', size: 24 })] })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: '2. Đã hoàn thành nghiệm thu', font: 'Times New Roman', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: `${stats.completedTasks} việc`, font: 'Times New Roman', bold: true, color: '16A34A', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: createVisualBar(stats.completionRate), font: 'Times New Roman', bold: true, color: '16A34A', size: 24 })] })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: '3. Hoàn thành đúng hạn cam kết', font: 'Times New Roman', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: `${stats.completedOnTime} việc`, font: 'Times New Roman', bold: true, color: '2563EB', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: createVisualBar(stats.onTimeRate), font: 'Times New Roman', bold: true, color: '2563EB', size: 24 })] })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: '4. Hoàn thành trễ hạn', font: 'Times New Roman', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: `${stats.completedLate} việc`, font: 'Times New Roman', color: stats.completedLate > 0 ? 'DC2626' : '64748B', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: createVisualBar(stats.totalTasks > 0 ? (stats.completedLate / stats.totalTasks) * 100 : 0), font: 'Times New Roman', color: stats.completedLate > 0 ? 'DC2626' : '64748B', size: 24 })] })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: '5. Đang tiếp tục xử lý', font: 'Times New Roman', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: `${stats.inProgressTasks} việc`, font: 'Times New Roman', color: 'D97706', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: createVisualBar(stats.totalTasks > 0 ? (stats.inProgressTasks / stats.totalTasks) * 100 : 0), font: 'Times New Roman', color: 'D97706', size: 24 })] })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: '6. Tồn đọng từ kỳ trước chuyển sang', font: 'Times New Roman', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: `${stats.backlogTasks} việc`, font: 'Times New Roman', color: '9333EA', size: 26 })] })],
+          }),
+          new TableCell({
+            borders: tableBorderCell,
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new TextRun({ text: createVisualBar(stats.totalTasks > 0 ? (stats.backlogTasks / stats.totalTasks) * 100 : 0), font: 'Times New Roman', color: '9333EA', size: 24 })] })],
+          }),
+        ],
       }),
     ],
   });
@@ -477,6 +632,24 @@ export async function exportAllCompletedTasksToDocx(
 ): Promise<Blob> {
   const completedTasks = tasks.filter((t) => t.status === 'completed' || t.progress === 100);
 
+  const onTimeCount = completedTasks.filter((t) => {
+    if (!t.completedAt || !t.dueDate) return true;
+    return new Date(t.completedAt).getTime() <= new Date(t.dueDate).getTime();
+  }).length;
+  const lateCount = completedTasks.length - onTimeCount;
+  const onTimeRate = completedTasks.length > 0 ? Math.round((onTimeCount / completedTasks.length) * 100) : 100;
+
+  const stats: ReportStatistics = {
+    totalTasks: completedTasks.length,
+    completedTasks: completedTasks.length,
+    completedOnTime: onTimeCount,
+    completedLate: lateCount,
+    inProgressTasks: 0,
+    backlogTasks: 0,
+    onTimeRate: onTimeRate,
+    completionRate: 100,
+  };
+
   const summaryRows = completedTasks.map((t, idx) => {
     return new TableRow({
       children: [
@@ -654,11 +827,14 @@ export async function exportAllCompletedTasksToDocx(
           // II. Kết quả thực hiện
           createAdminParagraph('II. KẾT QUẢ THỰC HIỆN', { bold: true, size: 28, indentFirstLine: false, spacingBefore: 180 }),
           createAdminParagraph(
-            `- Tổng số nhiệm vụ đã hoàn thành đạt chuẩn nghiệm thu: ${completedTasks.length} nhiệm vụ.`,
+            `- Tổng số nhiệm vụ đã hoàn thành đạt chuẩn nghiệm thu: ${completedTasks.length} nhiệm vụ (Tỷ lệ đúng hạn đạt ${onTimeRate}%).`,
             { size: 28, indentFirstLine: true }
           ),
+          createAdminParagraph('1. Bảng chỉ số tổng quan đại diện và biểu đồ tiến độ:', { bold: true, size: 28, indentFirstLine: true }),
+          createOverviewMetricsChartTable(stats),
+          createAdminParagraph('2. Bảng kiểm kê chi tiết các nhiệm vụ đã hoàn thành đạt chuẩn:', { bold: true, size: 28, indentFirstLine: true, spacingBefore: 120 }),
 
-          // Bảng thống kê
+          // Bảng thống kê chi tiết
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
             rows: [
@@ -835,4 +1011,382 @@ export async function downloadAllCompletedTasksDocx(tasks: Task[], user?: UserPr
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Client-side robust generator for customized administrative Word reports
+ * strictly complying with Vietnamese administrative standards (Nghị định 30/2020/NĐ-CP).
+ * Includes representative overview metric chart table.
+ */
+export async function exportCustomWordReportDocx(params: {
+  tasks: Task[];
+  statistics: ReportStatistics;
+  reportTitle?: string;
+  periodLabel?: string;
+  unitName?: string;
+  createdByName?: string;
+  customDocConfig?: Partial<WordReportCustomConfig>;
+}): Promise<Blob> {
+  const {
+    tasks,
+    statistics,
+    reportTitle = 'BÁO CÁO KẾT QUẢ THỰC HIỆN CÔNG VIỆC',
+    periodLabel = 'Kỳ báo cáo',
+    unitName = 'Toàn bộ đơn vị',
+    createdByName = 'Cán bộ quản lý',
+    customDocConfig = {},
+  } = params;
+
+  const governingBody = cleanAdministrativeText(customDocConfig.governingBody || 'ỦY BAN NHÂN DÂN / ĐƠN VỊ CẤP TRÊN');
+  const issuingAgency = cleanAdministrativeText(customDocConfig.issuingAgency || unitName.toUpperCase());
+  const docNumber = cleanAdministrativeText(customDocConfig.docNumber || `Số: ..../BC-${unitName.slice(0, 4).toUpperCase()}`);
+  const now = new Date();
+  const locationDate = cleanAdministrativeText(
+    customDocConfig.locationAndDate ||
+      `Hà Nội, ngày ${now.getDate().toString().padStart(2, '0')} tháng ${(now.getMonth() + 1).toString().padStart(2, '0')} năm ${now.getFullYear()}`
+  );
+  const finalTitle = cleanAdministrativeText(customDocConfig.reportTitle || reportTitle);
+  const finalSubtitle = cleanAdministrativeText(customDocConfig.reportSubtitle || `Kỳ đánh giá: ${periodLabel}`);
+  const aiSummary = cleanAdministrativeText(customDocConfig.aiSummary || 'Các chỉ số hoàn thành đạt mức ổn định theo kế hoạch đề ra. Đơn vị cần tiếp tục kiểm soát chặt chẽ các nhiệm vụ sắp đến hạn.');
+  const futureDirections = cleanAdministrativeText(customDocConfig.futureDirections || 'Tập trung hoàn thành dứt điểm các nhiệm vụ tồn đọng và đẩy nhanh tiến độ các công việc trong kỳ tiếp theo.');
+  const sigTitle = cleanAdministrativeText(customDocConfig.signatoryTitle || 'THỦ TRƯỞNG ĐƠN VỊ');
+  const sigNote = cleanAdministrativeText(customDocConfig.signatoryNote || '(Ký và ghi rõ họ tên)');
+  const sigName = cleanAdministrativeText(customDocConfig.signatoryName || createdByName);
+  const recipients = cleanAdministrativeText(customDocConfig.recipientList || 'Nơi nhận:\n- Lãnh đạo đơn vị;\n- Các bộ phận phụ trách;\n- Lưu: VT, Hồ sơ việc.');
+
+  // Header Table
+  const headerTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: tableBorderNone,
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 45, type: WidthType.PERCENTAGE },
+            borders: tableBorderNone,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: governingBody.toUpperCase(), font: 'Times New Roman', size: 26 })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: issuingAgency.toUpperCase(), font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: '-----------------------', font: 'Times New Roman', size: 20, color: '666666' })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: docNumber, font: 'Times New Roman', size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 55, type: WidthType.PERCENTAGE },
+            borders: tableBorderNone,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: 'Độc lập - Tự do - Hạnh phúc', font: 'Times New Roman', bold: true, size: 28 })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: '-------------------------------', font: 'Times New Roman', size: 20, color: '666666' })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: locationDate, font: 'Times New Roman', italics: true, size: 28 })],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  // Task Rows for detailed inventory
+  const taskRows = tasks.map((t, idx) => {
+    let statusText = 'Đang thực hiện';
+    if (t.status === 'completed') statusText = 'Đã hoàn thành';
+    else if (t.status === 'pending') statusText = 'Chờ xử lý';
+    else if (t.status === 'overdue') statusText = 'Trễ hạn';
+
+    return new TableRow({
+      children: [
+        new TableCell({
+          width: { size: 6, type: WidthType.PERCENTAGE },
+          borders: tableBorderCell,
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 40, after: 40, line: 240 },
+              children: [new TextRun({ text: String(idx + 1), font: 'Times New Roman', size: 26 })],
+            }),
+          ],
+        }),
+        new TableCell({
+          width: { size: 40, type: WidthType.PERCENTAGE },
+          borders: tableBorderCell,
+          children: [
+            new Paragraph({
+              spacing: { before: 40, after: 40, line: 240 },
+              children: [new TextRun({ text: cleanAdministrativeText(t.title), font: 'Times New Roman', bold: true, size: 26 })],
+            }),
+          ],
+        }),
+        new TableCell({
+          width: { size: 18, type: WidthType.PERCENTAGE },
+          borders: tableBorderCell,
+          children: [
+            new Paragraph({
+              spacing: { before: 40, after: 40, line: 240 },
+              children: [new TextRun({ text: cleanAdministrativeText(t.unit || 'Chung'), font: 'Times New Roman', size: 26 })],
+            }),
+          ],
+        }),
+        new TableCell({
+          width: { size: 18, type: WidthType.PERCENTAGE },
+          borders: tableBorderCell,
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 40, after: 40, line: 240 },
+              children: [new TextRun({ text: t.dueDate ? formatDateVietnamese(t.dueDate) : 'Không có hạn', font: 'Times New Roman', size: 26 })],
+            }),
+          ],
+        }),
+        new TableCell({
+          width: { size: 18, type: WidthType.PERCENTAGE },
+          borders: tableBorderCell,
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 40, after: 40, line: 240 },
+              children: [
+                new TextRun({
+                  text: statusText,
+                  font: 'Times New Roman',
+                  bold: t.status === 'completed',
+                  color: t.status === 'completed' ? '16A34A' : t.status === 'overdue' ? 'DC2626' : '334155',
+                  size: 26,
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+  });
+
+  const detailedTaskTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: tableBorderCell,
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          new TableCell({
+            width: { size: 6, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'STT', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 40, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Nội dung nhiệm vụ', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 18, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Đơn vị', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 18, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Hạn hoàn thành', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 18, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 60, after: 60, line: 240 },
+                children: [new TextRun({ text: 'Trạng thái', font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+        ],
+      }),
+      ...taskRows,
+    ],
+  });
+
+  // Signature Table
+  const signatureTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: tableBorderNone,
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: tableBorderNone,
+            children: [
+              new Paragraph({
+                spacing: { before: 180, after: 40, line: 240 },
+                children: [new TextRun({ text: 'Nơi nhận:', font: 'Times New Roman', bold: true, italics: true, size: 24 })],
+              }),
+              ...recipients
+                .split('\n')
+                .map((l: string) => cleanAdministrativeText(l))
+                .filter((l: string) => Boolean(l) && !l.toLowerCase().startsWith('nơi nhận:'))
+                .map(
+                  (cleanedLine: string) =>
+                    new Paragraph({
+                      spacing: { before: 20, after: 20, line: 240 },
+                      children: [new TextRun({ text: cleanedLine, font: 'Times New Roman', size: 22, italics: true })],
+                    })
+                ),
+            ],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: tableBorderNone,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 180, after: 40, line: 240 },
+                children: [new TextRun({ text: sigTitle.toUpperCase(), font: 'Times New Roman', bold: true, size: 28 })],
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 40, line: 240 },
+                children: [new TextRun({ text: sigNote, font: 'Times New Roman', italics: true, size: 24 })],
+              }),
+              new Paragraph({ spacing: { before: 800, after: 0, line: 240 }, children: [] }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 0, line: 240 },
+                children: [new TextRun({ text: sigName, font: 'Times New Roman', bold: true, size: 28 })],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: ADMINISTRATIVE_PAGE_MARGINS,
+          },
+        },
+        children: [
+          headerTable,
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 240, after: 60, line: 240 },
+            children: [new TextRun({ text: 'BÁO CÁO', font: 'Times New Roman', bold: true, size: 28 })],
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 0, after: 180, line: 240 },
+            children: [new TextRun({ text: finalTitle, font: 'Times New Roman', bold: true, size: 28 })],
+          }),
+          createAdminParagraph(
+            `Căn cứ Quy chế làm việc và chương trình công tác trọng tâm ${finalSubtitle}, ${issuingAgency} tổng hợp báo cáo chi tiết kết quả thực hiện các nhiệm vụ công việc như sau:`,
+            { italics: true, size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph('I. ĐẶC ĐIỂM TÌNH HÌNH', { bold: true, size: 28, indentFirstLine: false, spacingBefore: 180 }),
+          createAdminParagraph(
+            `- Bối cảnh tình hình: Trong kỳ báo cáo ${finalSubtitle}, đơn vị tiếp nhận và xử lý tổng cộng ${statistics.totalTasks} nhiệm vụ thuộc các mảng công tác chuyên môn trên hệ thống.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph(
+            `- Thuận lợi: Được sự quan tâm, chỉ đạo thường xuyên của Lãnh đạo đơn vị; đội ngũ cán bộ có tinh thần trách nhiệm cao, chủ động bám sát kế hoạch và ứng dụng nền tảng số hóa theo dõi tiến độ thời gian thực.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph(
+            `- Khó khăn: Một số công việc có tính chất đột xuất, yêu cầu phối hợp liên phòng ban trong thời gian ngắn đòi hỏi sự điều phối linh hoạt.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph('II. KẾT QUẢ THỰC HIỆN', { bold: true, size: 28, indentFirstLine: false, spacingBefore: 180 }),
+          createAdminParagraph('1. Bảng chỉ số tổng quan đại diện và biểu đồ tiến độ:', { bold: true, size: 28, indentFirstLine: true }),
+          createOverviewMetricsChartTable(statistics),
+          createAdminParagraph('2. Bảng kiểm kê chi tiết các nhiệm vụ thực hiện trong kỳ:', { bold: true, size: 28, indentFirstLine: true, spacingBefore: 120 }),
+          detailedTaskTable,
+          createAdminParagraph('III. ĐÁNH GIÁ', { bold: true, size: 28, indentFirstLine: false, spacingBefore: 180 }),
+          createAdminParagraph('1. Ưu điểm:', { bold: true, size: 28, indentFirstLine: true }),
+          createAdminParagraph(
+            `- Đa số các nhiệm vụ trọng tâm được triển khai đúng mốc tiến độ; chất lượng công việc được kiểm soát chặt chẽ thông qua việc phân chia các bước việc con và hồ sơ lưu trữ điện tử.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph(`- ${aiSummary}`, { size: 28, indentFirstLine: true }),
+          createAdminParagraph('2. Hạn chế và nguyên nhân:', { bold: true, size: 28, indentFirstLine: true }),
+          createAdminParagraph(
+            `- Còn một số nhiệm vụ trễ hạn (${statistics.completedLate} việc) do công tác thu thập số liệu đầu vào từ các cơ sở chưa đạt tiến độ yêu cầu.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph('IV. PHƯƠNG HƯỚNG, NHIỆM VỤ TIẾP THEO', { bold: true, size: 28, indentFirstLine: false, spacingBefore: 180 }),
+          createAdminParagraph(`- ${futureDirections}`, { size: 28, indentFirstLine: true }),
+          createAdminParagraph(
+            `- Rà soát toàn bộ các nhiệm vụ đang thực hiện và việc tồn đọng để xây dựng kế hoạch bứt phá, cam kết hoàn thành đúng hạn 100% trong kỳ tới.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph('V. KIẾN NGHỊ, ĐỀ XUẤT', { bold: true, size: 28, indentFirstLine: false, spacingBefore: 180 }),
+          createAdminParagraph(
+            `- Kính đề nghị Lãnh đạo cấp trên xem xét, phê duyệt kết quả thực hiện nhiệm vụ ${finalSubtitle} của ${issuingAgency}.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          createAdminParagraph(
+            `- Tiếp tục tạo điều kiện về trang thiết bị và cơ chế phối hợp liên đơn vị nhằm nâng cao hơn nữa hiệu quả giải quyết công vụ.`,
+            { size: 28, indentFirstLine: true }
+          ),
+          signatureTable,
+        ],
+      },
+    ],
+  });
+
+  return await Packer.toBlob(doc);
 }

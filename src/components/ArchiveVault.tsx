@@ -317,98 +317,216 @@ export const ArchiveVault: React.FC<ArchiveVaultProps> = ({
               </button>
             </div>
 
-            {/* Modal Content simulating Word document format */}
-            <div className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1 text-slate-800 text-xs sm:text-sm bg-slate-50/50">
-              {/* Document Mockup Box */}
-              <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-                {/* Header standard */}
-                <div className="grid grid-cols-2 text-center text-[11px] pb-4 border-b border-slate-200">
-                  <div>
-                    <span className="font-bold uppercase block">{previewTask.unit}</span>
-                    <span className="italic text-slate-500">HỆ THỐNG NSTASK</span>
+            {/* Modal Content simulating Word document format conforming to Nghị định 30/2020/NĐ-CP */}
+            <div className="p-4 sm:p-8 overflow-y-auto flex-1 text-slate-800 text-xs sm:text-sm bg-slate-100 flex justify-center">
+              {/* Document Sheet simulating A4 with standard margins (Top 2cm, Bottom 2cm, Left 3cm, Right 2cm) */}
+              <div
+                style={{
+                  fontFamily: "'Times New Roman', Times, serif",
+                  paddingTop: '20mm',
+                  paddingBottom: '20mm',
+                  paddingLeft: '30mm',
+                  paddingRight: '20mm',
+                }}
+                className="bg-white w-full max-w-[760px] min-h-[850px] shadow-2xl rounded-sm text-slate-900 border border-slate-300 relative space-y-4 text-justify select-text leading-relaxed"
+              >
+                {/* Header standard: 2 columns */}
+                <div className="grid grid-cols-12 gap-3 pb-3 border-b border-slate-300">
+                  <div className="col-span-5 text-center space-y-0.5">
+                    <div className="text-[11px] font-normal uppercase tracking-tight text-slate-600">
+                      CƠ QUAN / ĐƠN VỊ CHỦ QUẢN
+                    </div>
+                    <div className="text-xs font-bold uppercase text-slate-900">
+                      {previewTask.unit?.toUpperCase() || 'BAN THANH NIÊN'}
+                    </div>
+                    <div className="w-16 h-0.5 bg-slate-400 mx-auto my-1"></div>
+                    <div className="text-xs italic text-slate-600">
+                      Số: ..../BC-NT
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-bold uppercase block">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</span>
-                    <span className="font-semibold block">Độc lập - Tự do - Hạnh phúc</span>
+
+                  <div className="col-span-7 text-center space-y-0.5">
+                    <div className="text-xs font-bold uppercase tracking-tight text-slate-900">
+                      CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+                    </div>
+                    <div className="text-xs font-bold text-slate-900">
+                      Độc lập - Tự do - Hạnh phúc
+                    </div>
+                    <div className="w-24 h-0.5 bg-slate-400 mx-auto my-1"></div>
+                    <div className="text-xs italic text-slate-600">
+                      Hà Nội, ngày {new Date().getDate().toString().padStart(2, '0')} tháng {(new Date().getMonth() + 1).toString().padStart(2, '0')} năm {new Date().getFullYear()}
+                    </div>
                   </div>
                 </div>
 
-                <div className="text-center space-y-1">
-                  <h2 className="text-base sm:text-lg font-black text-blue-900 uppercase">
-                    BÁO CÁO KẾT QUẢ HOÀN THÀNH NHIỆM VỤ
+                {/* Document Title Banner: BÁO CÁO & Trích Yếu */}
+                <div className="text-center py-3 space-y-1">
+                  <h1 className="text-base sm:text-lg font-bold tracking-wide uppercase text-slate-900">
+                    BÁO CÁO
+                  </h1>
+                  <div className="text-sm sm:text-base font-bold text-slate-900">
+                    Kết quả thực hiện và nghiệm thu nhiệm vụ lưu trữ
+                  </div>
+                  <div className="text-xs italic text-slate-600">
+                    (Nhiệm vụ: {previewTask.title})
+                  </div>
+                </div>
+
+                {/* Mở đầu */}
+                <div className="text-justify text-xs italic text-slate-700 indent-[1.27cm] leading-relaxed">
+                  Căn cứ yêu cầu công tác và kế hoạch phân công nhiệm vụ của {previewTask.unit}, cán bộ phụ trách báo cáo chi tiết kết quả thực hiện và tiến hành nghiệm thu hồ sơ như sau:
+                </div>
+
+                {/* I. Đặc điểm tình hình */}
+                <div className="space-y-1.5 text-xs">
+                  <h2 className="font-bold text-slate-900 text-sm">
+                    I. ĐẶC ĐIỂM TÌNH HÌNH
                   </h2>
-                  <p className="text-xs text-slate-500 italic">Mã số: #{previewTask.id.slice(0, 8).toUpperCase()}</p>
+                  <div className="space-y-1 text-justify indent-[1.27cm] leading-relaxed">
+                    <p>- Bối cảnh triển khai: Nhiệm vụ được giao thực hiện từ ngày {formatDateVietnamese(previewTask.createdAt)} với thời hạn cam kết hoàn thành trước ngày {formatDateVietnamese(previewTask.dueDate)}.</p>
+                    <p>- Thuận lợi: Được sự quan tâm chỉ đạo sát sao của lãnh đạo đơn vị, các nguồn lực tài liệu và quy trình phối hợp được đảm bảo kịp thời.</p>
+                    <p>- Khó khăn: Đòi hỏi tính chuẩn xác cao và kiểm soát chặt chẽ từng bước việc con trước khi kết chuyển vào kho lưu trữ số hóa.</p>
+                  </div>
                 </div>
 
-                {/* Section I */}
-                <div className="space-y-1.5 text-xs">
-                  <h4 className="font-bold text-slate-900 uppercase border-b pb-1">I. Thông tin chung</h4>
-                  <p><strong>Tên nhiệm vụ:</strong> {previewTask.title}</p>
-                  <p><strong>Đơn vị thực hiện:</strong> {previewTask.unit}</p>
-                  <p><strong>Thời gian khởi tạo:</strong> {formatDateVietnamese(previewTask.createdAt)}</p>
-                  <p><strong>Hạn chót kế hoạch:</strong> {formatDateVietnamese(previewTask.dueDate)}</p>
-                  <p><strong>Hoàn thành thực tế:</strong> {previewTask.completedAt ? formatDateVietnamese(previewTask.completedAt) : 'Đã nghiệm thu'}</p>
-                  <p><strong>Tiến độ:</strong> 100% (Đạt tiêu chuẩn nghiệm thu)</p>
-                </div>
-
-                {/* Section II */}
-                <div className="space-y-1.5 text-xs">
-                  <h4 className="font-bold text-slate-900 uppercase border-b pb-1">II. Mô tả công việc</h4>
-                  <p className="text-slate-600 leading-relaxed">{previewTask.description || 'Không có mô tả chi tiết.'}</p>
-                </div>
-
-                {/* Section III */}
+                {/* II. Kết quả thực hiện & Biểu đồ tổng quan */}
                 <div className="space-y-2 text-xs">
-                  <h4 className="font-bold text-slate-900 uppercase border-b pb-1">III. Danh sách hạng mục đã hoàn thành</h4>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-left border-collapse">
+                  <h2 className="font-bold text-slate-900 text-sm">
+                    II. KẾT QUẢ THỰC HIỆN
+                  </h2>
+                  <div className="text-xs font-bold indent-[1.27cm]">
+                    1. Bảng chỉ số tổng quan đại diện &amp; biểu đồ tiến độ nghiệm thu:
+                  </div>
+
+                  {/* Representative Chart & Visual Meters */}
+                  <div className="border border-slate-300 rounded-lg p-3 bg-slate-50/80 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-700">
+                          <span>Tiến độ hoàn thành:</span>
+                          <span className="font-bold text-emerald-600">100% (Đạt tiêu chuẩn)</span>
+                        </div>
+                        <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+                          <div className="h-full bg-emerald-500 rounded-full w-full" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px] font-semibold text-slate-700">
+                          <span>Đánh giá thời hạn:</span>
+                          <span className={`font-bold ${previewTask.completedAt && previewTask.dueDate && new Date(previewTask.completedAt) > new Date(previewTask.dueDate) ? 'text-amber-600' : 'text-blue-600'}`}>
+                            {previewTask.completedAt && previewTask.dueDate && new Date(previewTask.completedAt) > new Date(previewTask.dueDate) ? 'Hoàn thành trễ hạn' : 'Đúng hạn cam kết (100%)'}
+                          </span>
+                        </div>
+                        <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden border border-slate-300">
+                          <div className="h-full bg-blue-500 rounded-full w-full" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2 text-center pt-1">
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <div className="text-[10px] text-slate-500 font-medium">Đơn vị phụ trách</div>
+                        <div className="text-xs font-bold text-slate-800 truncate">{previewTask.unit}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <div className="text-[10px] text-slate-500 font-medium">Hạng mục con</div>
+                        <div className="text-xs font-bold text-indigo-700">{previewTask.subtasks?.length || 0} mục đã xong</div>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <div className="text-[10px] text-slate-500 font-medium">Thời gian hoàn thành</div>
+                        <div className="text-xs font-bold text-emerald-700">{previewTask.completedAt ? formatDateVietnamese(previewTask.completedAt) : 'Đã nghiệm thu'}</div>
+                      </div>
+                      <div className="bg-white p-2 rounded-lg border border-slate-200">
+                        <div className="text-[10px] text-slate-500 font-medium">Trạng thái lưu trữ</div>
+                        <div className="text-xs font-bold text-emerald-700">Nghiệm thu vĩnh viễn</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs font-bold indent-[1.27cm] pt-1">
+                    2. Bảng kiểm kê chi tiết các hạng mục đã hoàn thành:
+                  </div>
+
+                  {/* Detailed Table */}
+                  <div className="border border-slate-300 rounded-lg overflow-hidden">
+                    <table className="w-full text-left border-collapse text-xs">
                       <thead className="bg-slate-100 text-[11px] font-bold">
                         <tr>
-                          <th className="p-2 border-b border-r text-center w-10">STT</th>
-                          <th className="p-2 border-b border-r">Nội dung công việc &amp; Tài liệu mạng</th>
-                          <th className="p-2 border-b text-center w-28">Trạng thái</th>
+                          <th className="p-2 border-b border-r text-center w-12">STT</th>
+                          <th className="p-2 border-b border-r">Nội dung công việc &amp; Giai đoạn</th>
+                          <th className="p-2 border-b text-center w-32">Kết quả nghiệm thu</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 text-[11px]">
-                        {previewTask.subtasks.map((st, i) => (
-                          <tr key={st.id}>
-                            <td className="p-2 text-center border-r font-medium">{i + 1}</td>
-                            <td className="p-2 border-r">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {st.phase && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                    {st.phase}
+                      <tbody className="divide-y divide-slate-200 text-[11px]">
+                        {previewTask.subtasks && previewTask.subtasks.length > 0 ? (
+                          previewTask.subtasks.map((st, i) => (
+                            <tr key={st.id}>
+                              <td className="p-2 text-center border-r font-medium">{i + 1}</td>
+                              <td className="p-2 border-r">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {st.phase && (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      {st.phase}
+                                    </span>
+                                  )}
+                                  <span className="font-semibold text-slate-800">{st.title}</span>
+                                </div>
+                                {st.resource && (
+                                  <span className="text-[10px] text-blue-600 italic block mt-0.5">
+                                    [Tài liệu: {st.resource.title} - {st.resource.url}]
                                   </span>
                                 )}
-                                <span className="font-semibold">{st.title}</span>
-                              </div>
-                              {st.resource && (
-                                <span className="text-[10px] text-blue-600 italic block mt-0.5">
-                                  [{st.resource.title} - {st.resource.url}]
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-2 text-center text-emerald-700 font-bold">
-                              ✓ ĐÃ HOÀN THÀNH
+                              </td>
+                              <td className="p-2 text-center text-emerald-700 font-bold whitespace-nowrap">
+                                ✓ ĐÃ HOÀN THÀNH
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="p-3 text-center text-slate-500 italic">
+                              Toàn bộ nhiệm vụ đã được thực hiện và hoàn thành theo đúng mô tả.
                             </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
-                {/* Signature Block */}
-                <div className="grid grid-cols-2 text-center text-xs pt-4 border-t border-slate-200">
-                  <div>
-                    <span className="font-bold uppercase block">XÁC NHẬN CỦA ĐƠN VỊ</span>
-                    <span className="italic text-slate-400 text-[10px] block mb-12">(Ký, ghi rõ họ tên)</span>
-                    <span className="font-bold">{previewTask.unit}</span>
+                {/* III. Đánh giá */}
+                <div className="space-y-1 text-xs">
+                  <h2 className="font-bold text-slate-900 text-sm">
+                    III. ĐÁNH GIÁ VÀ KẾT LUẬN
+                  </h2>
+                  <p className="indent-[1.27cm] text-justify leading-relaxed">
+                    Nhiệm vụ "{previewTask.title}" đã được triển khai nghiêm túc, đạt 100% khối lượng đề ra và đáp ứng toàn diện tiêu chuẩn chất lượng. Đơn vị đã hoàn tất nghiệm thu và chuyển lưu trữ điện tử.
+                  </p>
+                </div>
+
+                {/* IV. Phương hướng */}
+                <div className="space-y-1 text-xs">
+                  <h2 className="font-bold text-slate-900 text-sm">
+                    IV. PHƯƠNG HƯỚNG BÀN GIAO LƯU TRỮ
+                  </h2>
+                  <p className="indent-[1.27cm] text-justify leading-relaxed">
+                    Hồ sơ công việc và các tài liệu liên quan được số hóa, lưu trữ lâu dài trên nền tảng NSTask để phục vụ công tác tra cứu, tổng hợp báo cáo và thanh kiểm tra công vụ khi có yêu cầu.
+                  </p>
+                </div>
+
+                {/* Khối chữ ký chuẩn 2 cột */}
+                <div className="grid grid-cols-2 text-xs pt-4 border-t border-slate-300">
+                  <div className="text-left space-y-1">
+                    <span className="font-bold italic block">Nơi nhận:</span>
+                    <span className="italic text-slate-600 text-[11px] block">- Lãnh đạo đơn vị;</span>
+                    <span className="italic text-slate-600 text-[11px] block">- Bộ phận lưu trữ;</span>
+                    <span className="italic text-slate-600 text-[11px] block">- Lưu: VT, Hồ sơ nhiệm vụ.</span>
                   </div>
-                  <div>
-                    <span className="font-bold uppercase block">NGƯỜI THỰC HIỆN BÁO CÁO</span>
-                    <span className="italic text-slate-400 text-[10px] block mb-12">(Ký, ghi rõ họ tên)</span>
-                    <span className="font-bold">{userProfile.displayName}</span>
+                  <div className="text-center space-y-1">
+                    <span className="font-bold uppercase block text-slate-900">NGƯỜI THỰC HIỆN BÁO CÁO</span>
+                    <span className="italic text-slate-500 text-[10px] block mb-12">(Ký và ghi rõ họ tên)</span>
+                    <span className="font-bold text-slate-900 text-sm block">{userProfile.displayName}</span>
                   </div>
                 </div>
               </div>

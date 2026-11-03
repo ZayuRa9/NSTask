@@ -582,6 +582,134 @@ export interface ProductivityTrendPoint {
 }
 
 /**
+ * Safely calculates task execution lead time in milliseconds.
+ * Clamps reasonable bounds (0.5 hour to 720 hours = 30 days) and prevents epoch/invalid date diffs.
+ */
+export function getSafeTaskLeadDurationMs(
+  task: { createdAt?: string; completedAt?: string; dueDate?: string },
+  compTimeMs: number
+): number {
+  const oneHourMs = 60 * 60 * 1000;
+  if (isNaN(compTimeMs) || compTimeMs <= 0) return 24 * oneHourMs;
+
+  let createMs = task.createdAt ? new Date(task.createdAt).getTime() : NaN;
+  // Year 2020 timestamp is 1577836800000. Reject epoch 0, NaN, or dates before 2020 or after completion
+  if (isNaN(createMs) || createMs < 1577836800000 || createMs > compTimeMs) {
+    if (task.dueDate) {
+      const dueMs = new Date(task.dueDate).getTime();
+      if (!isNaN(dueMs) && dueMs >= 1577836800000 && dueMs < compTimeMs) {
+        createMs = Math.max(dueMs - 48 * oneHourMs, compTimeMs - 72 * oneHourMs);
+      } else {
+        createMs = compTimeMs - 24 * oneHourMs;
+      }
+    } else {
+      createMs = compTimeMs - 24 * oneHourMs;
+    }
+  }
+
+  const rawDuration = compTimeMs - createMs;
+  // Bound strictly: minimum 30 minutes (0.5h), maximum 720 hours (30 days)
+  return Math.max(0.5 * oneHourMs, Math.min(rawDuration, 720 * oneHourMs));
+}
+
+export interface DailyPerformanceSummary {
+  createdToday: number;
+  completedToday: number;
+  onTimeToday: number;
+  todayOnTimeRate: number;
+  avgHoursToday: number;
+  createdYesterday: number;
+  completedYesterday: number;
+  netCreatedDiff: number; // createdToday - createdYesterday
+  netCompletedDiff: number; // completedToday - completedYesterday
+  todayStatusMessage: string;
+}
+
+/**
+ * Computes focused daily performance comparing today with yesterday and the past days.
+ */
+export function calculateDailyPerformanceSummary(tasks: Task[], refDate = new Date()): DailyPerformanceSummary {
+  const oneHourMs = 60 * 60 * 1000;
+  const startOfToday = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), 0, 0, 0, 0).getTime();
+  const endOfToday = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), 23, 59, 59, 999).getTime();
+
+  const startOfYesterday = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - 1, 0, 0, 0, 0).getTime();
+  const endOfYesterday = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - 1, 23, 59, 59, 999).getTime();
+
+  let createdToday = 0;
+  let completedToday = 0;
+  let onTimeToday = 0;
+  let totalDurationMsToday = 0;
+
+  let createdYesterday = 0;
+  let completedYesterday = 0;
+
+  tasks.forEach((t) => {
+    // Created
+    if (t.createdAt) {
+      const cTime = new Date(t.createdAt).getTime();
+      if (cTime >= startOfToday && cTime <= endOfToday) {
+        createdToday++;
+      } else if (cTime >= startOfYesterday && cTime <= endOfYesterday) {
+        createdYesterday++;
+      }
+    }
+
+    // Completed
+    if (t.status === 'completed' || t.progress === 100) {
+      const compTime = t.completedAt ? new Date(t.completedAt).getTime() : (t.dueDate ? new Date(t.dueDate).getTime() : 0);
+      if (compTime >= startOfToday && compTime <= endOfToday) {
+        completedToday++;
+        const duration = getSafeTaskLeadDurationMs(t, compTime);
+        totalDurationMsToday += duration;
+
+        if (t.dueDate) {
+          const dueTime = new Date(t.dueDate).getTime();
+          if (compTime <= dueTime + 3600000) onTimeToday++;
+        } else {
+          onTimeToday++;
+        }
+      } else if (compTime >= startOfYesterday && compTime <= endOfYesterday) {
+        completedYesterday++;
+      }
+    }
+  });
+
+  const todayOnTimeRate = completedToday > 0 ? Math.round((onTimeToday / completedToday) * 100) : 100;
+  const avgHoursToday = completedToday > 0 ? Number(((totalDurationMsToday / oneHourMs) / completedToday).toFixed(1)) : 0;
+  const netCreatedDiff = createdToday - createdYesterday;
+  const netCompletedDiff = completedToday - completedYesterday;
+
+  let todayStatusMessage = 'Nhịp độ ổn định: Khối lượng công việc hôm nay đang được duy trì đều đặn.';
+  if (createdToday > createdYesterday) {
+    todayStatusMessage = `Hôm nay đã giao mới ${createdToday} nhiệm vụ (+${netCreatedDiff} so với hôm qua). Đơn vị cần phân bổ tiến độ hợp lý.`;
+  } else if (completedToday > completedYesterday && completedToday > 0) {
+    todayStatusMessage = `Năng suất tăng tốc: Đã nghiệm thu ${completedToday} việc (+${netCompletedDiff} so với hôm qua), tỷ lệ đúng hạn ${todayOnTimeRate}%.`;
+  }
+
+  return {
+    createdToday,
+    completedToday,
+    onTimeToday,
+    todayOnTimeRate,
+    avgHoursToday,
+    createdYesterday,
+    completedYesterday,
+    netCreatedDiff,
+    netCompletedDiff,
+    todayStatusMessage,
+  };
+}
+
+/**
+ * Calculates daily productivity trends (completed task count & execution lead time)
+ * across today and recent individual days (last 7 days).
+ */
+export function calculateDailyProductivityTrend(tasks: Task[], refDate = new Date()): ProductivityTrendPoint[] {
+  return calculateWeeklyProductivityTrend(tasks, refDate);
+}
+
+/**
  * Calculates productivity trends (completed task count & execution lead time) over the last 7 days.
  */
 export function calculateWeeklyProductivityTrend(tasks: Task[], refDate = new Date()): ProductivityTrendPoint[] {
@@ -596,7 +724,7 @@ export function calculateWeeklyProductivityTrend(tasks: Task[], refDate = new Da
     const nextD = new Date(d);
     nextD.setDate(nextD.getDate() + 1);
 
-    const dayName = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
+    const dayName = i === 0 ? 'Hôm nay' : i === 1 ? 'Hôm qua' : ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
     const label = `${dayName} (${d.getDate()}/${d.getMonth() + 1})`;
     const fullDateLabel = `${dayName}, ngày ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 
@@ -607,12 +735,11 @@ export function calculateWeeklyProductivityTrend(tasks: Task[], refDate = new Da
 
     tasks.forEach((t) => {
       if (t.status === 'completed' || t.progress === 100) {
-        const compTime = t.completedAt ? new Date(t.completedAt).getTime() : new Date(t.dueDate).getTime();
+        const compTime = t.completedAt ? new Date(t.completedAt).getTime() : (t.dueDate ? new Date(t.dueDate).getTime() : 0);
         if (compTime >= d.getTime() && compTime < nextD.getTime()) {
           completedTasks++;
 
-          const createTime = t.createdAt ? new Date(t.createdAt).getTime() : compTime - 24 * oneHourMs;
-          const duration = Math.max(0.5 * oneHourMs, compTime - createTime);
+          const duration = getSafeTaskLeadDurationMs(t, compTime);
           totalDurationMs += duration;
 
           if (t.dueDate) {
@@ -626,15 +753,17 @@ export function calculateWeeklyProductivityTrend(tasks: Task[], refDate = new Da
         }
       }
 
-      const createTime = new Date(t.createdAt).getTime();
-      if (createTime >= d.getTime() && createTime < nextD.getTime()) {
-        createdTasks++;
+      if (t.createdAt) {
+        const createTime = new Date(t.createdAt).getTime();
+        if (createTime >= d.getTime() && createTime < nextD.getTime()) {
+          createdTasks++;
+        }
       }
     });
 
-    const totalHours = Math.round((totalDurationMs / oneHourMs) * 10) / 10;
-    const avgHours = completedTasks > 0 ? Math.round((totalHours / completedTasks) * 10) / 10 : 0;
-    const avgDays = Math.round((avgHours / 24) * 10) / 10;
+    const totalHours = Number(((totalDurationMs / oneHourMs)).toFixed(1));
+    const avgHours = completedTasks > 0 ? Number((totalHours / completedTasks).toFixed(1)) : 0;
+    const avgDays = Number((avgHours / 24).toFixed(1));
 
     points.push({
       label,
@@ -671,12 +800,11 @@ export function calculateMonthlyProductivityTrend(tasks: Task[], refDate = new D
 
     tasks.forEach((t) => {
       if (t.status === 'completed' || t.progress === 100) {
-        const compTime = t.completedAt ? new Date(t.completedAt).getTime() : new Date(t.dueDate).getTime();
+        const compTime = t.completedAt ? new Date(t.completedAt).getTime() : (t.dueDate ? new Date(t.dueDate).getTime() : 0);
         if (compTime >= d.getTime() && compTime < nextM.getTime()) {
           completedTasks++;
 
-          const createTime = t.createdAt ? new Date(t.createdAt).getTime() : compTime - 24 * oneHourMs;
-          const duration = Math.max(0.5 * oneHourMs, compTime - createTime);
+          const duration = getSafeTaskLeadDurationMs(t, compTime);
           totalDurationMs += duration;
 
           if (t.dueDate) {
@@ -690,15 +818,17 @@ export function calculateMonthlyProductivityTrend(tasks: Task[], refDate = new D
         }
       }
 
-      const createTime = new Date(t.createdAt).getTime();
-      if (createTime >= d.getTime() && createTime < nextM.getTime()) {
-        createdTasks++;
+      if (t.createdAt) {
+        const createTime = new Date(t.createdAt).getTime();
+        if (createTime >= d.getTime() && createTime < nextM.getTime()) {
+          createdTasks++;
+        }
       }
     });
 
-    const totalHours = Math.round((totalDurationMs / oneHourMs) * 10) / 10;
-    const avgHours = completedTasks > 0 ? Math.round((totalHours / completedTasks) * 10) / 10 : 0;
-    const avgDays = Math.round((avgHours / 24) * 10) / 10;
+    const totalHours = Number(((totalDurationMs / oneHourMs)).toFixed(1));
+    const avgHours = completedTasks > 0 ? Number((totalHours / completedTasks).toFixed(1)) : 0;
+    const avgDays = Number((avgHours / 24).toFixed(1));
 
     points.push({
       label,
@@ -803,8 +933,8 @@ export function calculateWeeklyPerformanceTrend(
         const compTime = t.completedAt ? new Date(t.completedAt).getTime() : (t.dueDate ? new Date(t.dueDate).getTime() : 0);
         if (compTime >= startTime && compTime <= endTime) {
           completedTasks++;
-          const cTime = t.createdAt ? new Date(t.createdAt).getTime() : compTime - 24 * oneHourMs;
-          totalDurationMs += Math.max(0.5 * oneHourMs, compTime - cTime);
+          const duration = getSafeTaskLeadDurationMs(t, compTime);
+          totalDurationMs += duration;
 
           if (t.dueDate) {
             const dueTime = new Date(t.dueDate).getTime();
@@ -824,7 +954,7 @@ export function calculateWeeklyPerformanceTrend(
     const totalTasks = Math.max(totalDue, completedTasks);
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : (completedTasks > 0 ? 100 : 0);
     const onTimeRate = completedTasks > 0 ? Math.round((onTimeTasks / completedTasks) * 100) : 100;
-    const avgLeadTimeHours = completedTasks > 0 ? Math.round((totalDurationMs / (completedTasks * oneHourMs)) * 10) / 10 : 0;
+    const avgLeadTimeHours = completedTasks > 0 ? Number(((totalDurationMs / (completedTasks * oneHourMs))).toFixed(1)) : 0;
 
     points.push({
       weekKey: `${start.getFullYear()}-W${String(weekNum).padStart(2, '0')}`,

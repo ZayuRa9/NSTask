@@ -21,6 +21,8 @@ import {
   X,
   Sparkles,
   Link2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { UserProfile, UserAccount } from '../types/task';
 import { playNotificationSound } from '../utils/audioNotification';
@@ -48,6 +50,8 @@ interface SidebarProps {
   onOpenCalendarSync?: () => void;
   isCalendarConnected?: boolean;
   onOpenReportModal?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -71,6 +75,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCalendarSync,
   isCalendarConnected,
   onOpenReportModal,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -186,44 +192,83 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Container: Deep navy/slate theme */}
       <aside
-        className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 xl:w-72 bg-gradient-to-b from-[#0F172A] via-[#1E293B] to-[#0A0F1D] text-slate-100 border-r border-slate-800/90 flex flex-col justify-between transition-transform duration-300 ease-in-out shrink-0 select-none shadow-xl ${
+        className={`fixed md:sticky top-0 left-0 z-40 h-screen ${
+          isCollapsed ? 'w-64 md:w-20' : 'w-64 xl:w-72'
+        } bg-gradient-to-b from-[#0F172A] via-[#1E293B] to-[#0A0F1D] text-slate-100 border-r border-slate-800/90 flex flex-col justify-between transition-all duration-300 ease-in-out shrink-0 select-none shadow-xl ${
           isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         }`}
       >
-        {/* Top: Logo */}
-        <div className="p-4 sm:p-5 border-b border-slate-800/80">
-          {/* Logo & Brand */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => handleNavClick('overview')}
-              className="flex items-center gap-3 text-left group focus:outline-hidden cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-blue-500 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform shrink-0">
-                <CheckSquare className="w-5 h-5 stroke-[2.2]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-base tracking-tight text-white">NSTask</span>
-                  <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[9px] font-black uppercase">PRO</span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-medium">Hệ Thống Quản Lý Việc</p>
-              </div>
-            </button>
+        {/* Top: Logo & Collapse Toggle */}
+        <div className={`border-b border-slate-800/80 ${isCollapsed ? 'p-3' : 'p-4 sm:p-5'}`}>
+          <div className="flex items-center justify-between gap-2">
+            {!isCollapsed ? (
+              <>
+                <button
+                  onClick={() => handleNavClick('overview')}
+                  className="flex items-center gap-3 text-left group focus:outline-hidden cursor-pointer min-w-0"
+                >
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-blue-500 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform shrink-0">
+                    <CheckSquare className="w-5 h-5 stroke-[2.2]" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-base tracking-tight text-white">NSTask</span>
+                      <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[9px] font-black uppercase">PRO</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium truncate">Hệ Thống Quản Lý</p>
+                  </div>
+                </button>
 
-            <button
-              onClick={() => setIsMobileOpen(false)}
-              className="md:hidden p-1.5 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {onToggleCollapse && (
+                    <button
+                      onClick={onToggleCollapse}
+                      className="hidden md:flex p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      title="Thu gọn thanh bên"
+                      aria-label="Thu gọn thanh bên"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsMobileOpen(false)}
+                    className="md:hidden p-1.5 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="w-full flex flex-col items-center gap-2">
+                <button
+                  onClick={() => handleNavClick('overview')}
+                  title="NSTask PRO - Bảng điều khiển"
+                  className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-blue-500 to-sky-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 hover:scale-105 transition-transform cursor-pointer"
+                >
+                  <CheckSquare className="w-5 h-5 stroke-[2.2]" />
+                </button>
+                {onToggleCollapse && (
+                  <button
+                    onClick={onToggleCollapse}
+                    className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title="Mở rộng thanh bên"
+                    aria-label="Mở rộng thanh bên"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Center: Main Navigation Links */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
-          <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Điều hướng chính
-          </div>
+        <div className={`flex-1 overflow-y-auto ${isCollapsed ? 'px-2 py-3' : 'px-3 py-4'} space-y-1.5`}>
+          {!isCollapsed && (
+            <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Điều hướng chính
+            </div>
+          )}
 
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -233,45 +278,66 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer group ${
+                title={`${item.label}${item.badge ? ` (${item.badge})` : ''}`}
+                className={`w-full flex items-center ${
+                  isCollapsed ? 'justify-center p-3 relative' : 'justify-between px-3.5 py-2.5'
+                } rounded-xl text-xs font-semibold transition-all cursor-pointer group ${
                   isActive
                     ? 'bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 text-white shadow-md shadow-indigo-950/50 font-bold'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5 min-w-0'}`}>
                   <Icon
                     className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-110 ${
                       isActive ? 'text-white' : item.color
                     }`}
                   />
-                  <span className="truncate">{item.label}</span>
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                  {item.badge !== null && item.badge !== undefined && (
+                {!isCollapsed ? (
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {item.badge !== null && item.badge !== undefined && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : item.badgeColor || 'bg-slate-800 text-slate-300 border border-slate-700'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                    {item.badgeAlert && (
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                    )}
+                  </div>
+                ) : (
+                  item.badge !== null && item.badge !== undefined && (
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      className={`absolute top-1.5 right-1.5 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${
                         isActive
-                          ? 'bg-white/20 text-white'
-                          : item.badgeColor || 'bg-slate-800 text-slate-300 border border-slate-700'
+                          ? 'bg-white text-indigo-800'
+                          : item.badgeColor || 'bg-indigo-500 text-white'
                       }`}
                     >
                       {item.badge}
                     </span>
-                  )}
-                  {item.badgeAlert && (
-                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                  )}
-                </div>
+                  )
+                )}
               </button>
             );
           })}
 
-          {/* Quick Tools Header */}
-          <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Công cụ nhanh
-          </div>
+          {/* Quick Tools */}
+          {!isCollapsed ? (
+            <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Công cụ nhanh
+            </div>
+          ) : (
+            <div className="my-2 border-t border-slate-800" />
+          )}
 
           {/* Google Calendar Link Button */}
           {onOpenCalendarSync && (
@@ -280,18 +346,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onOpenCalendarSync();
                 setIsMobileOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              title={isCalendarConnected ? 'Lịch Google (Đã kết nối)' : 'Lịch Google'}
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center p-3 relative' : 'justify-between px-3.5 py-2.5'
+              } rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 isCalendarConnected
                   ? 'bg-blue-900/40 text-blue-200 hover:bg-blue-800/50 border border-blue-700/50'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-slate-800'
               }`}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5 min-w-0'}`}>
                 <Calendar className="w-4 h-4 text-sky-400 shrink-0" />
-                <span className="truncate">Lịch Google</span>
+                {!isCollapsed && <span className="truncate">Lịch Google</span>}
               </div>
               {isCalendarConnected && (
-                <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+                <span className={`${isCollapsed ? 'absolute top-1.5 right-1.5' : ''} w-2 h-2 rounded-full bg-sky-400 animate-pulse`} />
               )}
             </button>
           )}
@@ -303,32 +372,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onOpenReportModal();
                 setIsMobileOpen(false);
               }}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/50 transition-all cursor-pointer"
+              title="Xuất Báo cáo Word (.docx)"
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center p-3' : 'justify-between px-3.5 py-2.5'
+              } rounded-xl text-xs font-semibold text-indigo-200 bg-indigo-950/40 hover:bg-indigo-900/50 border border-indigo-800/50 transition-all cursor-pointer`}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5 min-w-0'}`}>
                 <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
-                <span className="truncate">Báo cáo Word (.docx)</span>
+                {!isCollapsed && <span className="truncate">Báo cáo Word (.docx)</span>}
               </div>
             </button>
           )}
         </div>
 
         {/* Bottom: Action Buttons & Sync Status */}
-        <div className="p-3 sm:p-4 border-t border-slate-800/80 space-y-2.5 bg-slate-950/60">
+        <div className={`${isCollapsed ? 'p-2' : 'p-3 sm:p-4'} border-t border-slate-800/80 space-y-2 bg-slate-950/60`}>
           {/* Create Task Button */}
           <button
             onClick={() => {
               onOpenCreateModal();
               setIsMobileOpen(false);
             }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-500 via-blue-600 to-indigo-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-indigo-950/50 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            title="Tạo Nhiệm vụ mới"
+            className={`w-full flex items-center justify-center gap-2 ${
+              isCollapsed ? 'p-2.5' : 'py-2.5 px-3'
+            } rounded-xl bg-gradient-to-r from-indigo-500 via-blue-600 to-indigo-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-indigo-950/50 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer`}
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Tạo Nhiệm vụ mới</span>
+            {!isCollapsed && <span>Tạo Nhiệm vụ mới</span>}
           </button>
 
           {/* Sync & Audio Controls Row */}
-          <div className="flex items-center justify-between gap-1 pt-1">
+          <div className={`flex items-center justify-between gap-1 pt-1 ${isCollapsed ? 'flex-col' : ''}`}>
             {/* Sync Status Button */}
             <button
               onClick={onSyncNow}
@@ -340,7 +415,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? 'Đang đồng bộ...'
                   : `Đã đồng bộ ${lastSyncedAt ? `(${new Date(lastSyncedAt).toLocaleTimeString()})` : ''}`
               }
-              className={`flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+              className={`${isCollapsed ? 'w-full p-2' : 'flex-1 px-2.5 py-1.5'} flex items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
                 !isOnline
                   ? 'bg-amber-950/60 text-amber-200 border-amber-700/50'
                   : isSyncing
@@ -351,15 +426,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!isOnline ? (
                 <>
                   <WifiOff className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="truncate">Offline</span>
+                  {!isCollapsed && <span className="truncate">Offline</span>}
                 </>
               ) : isSyncing ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin shrink-0" />
-                  <span className="truncate">Đồng bộ</span>
+                  {!isCollapsed && <span className="truncate">Đồng bộ</span>}
                 </>
               ) : (
-                <div className="flex items-center justify-center w-full py-0.5">
+                <div className="flex items-center justify-center py-0.5">
                   <Wifi className="w-4 h-4 text-emerald-400 shrink-0" />
                 </div>
               )}
@@ -374,7 +449,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }
               }}
               title={soundEnabled ? 'Âm thanh thông báo: Bật' : 'Âm thanh thông báo: Tắt'}
-              className={`p-2 rounded-lg border transition-colors cursor-pointer ${
+              className={`${isCollapsed ? 'w-full p-2' : 'p-2'} flex items-center justify-center rounded-lg border transition-colors cursor-pointer ${
                 soundEnabled
                   ? 'bg-indigo-950/60 text-indigo-300 border-indigo-700/50'
                   : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
@@ -387,7 +462,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={onLogout}
               title="Đăng xuất"
-              className="p-2 rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-400 hover:border-rose-800/50 hover:bg-rose-950/40 transition-colors cursor-pointer"
+              className={`${isCollapsed ? 'w-full p-2' : 'p-2'} flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-400 hover:border-rose-800/50 hover:bg-rose-950/40 transition-colors cursor-pointer`}
             >
               <LogOut className="w-4 h-4" />
             </button>

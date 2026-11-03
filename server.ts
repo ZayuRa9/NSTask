@@ -3882,6 +3882,86 @@ app.post('/api/reports/generate-docx', async (req: Request, res: Response) => {
       })
     );
 
+    const createVisualBar = (ratePercent: number, totalChars = 16): string => {
+      const safePercent = Math.max(0, Math.min(100, Math.round(ratePercent || 0)));
+      const filledCount = Math.round((safePercent / 100) * totalChars);
+      const emptyCount = Math.max(0, totalChars - filledCount);
+      return '█'.repeat(filledCount) + '░'.repeat(emptyCount) + ` ${safePercent}%`;
+    };
+
+    const overviewMetricsTable = new DocxTable({
+      width: { size: 100, type: DocxWidthType.PERCENTAGE },
+      borders: {
+        top: { style: DocxBorderStyle.SINGLE, size: 2, color: 'CCCCCC' },
+        bottom: { style: DocxBorderStyle.SINGLE, size: 2, color: 'CCCCCC' },
+        left: { style: DocxBorderStyle.SINGLE, size: 2, color: 'CCCCCC' },
+        right: { style: DocxBorderStyle.SINGLE, size: 2, color: 'CCCCCC' },
+        insideHorizontal: { style: DocxBorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+        insideVertical: { style: DocxBorderStyle.SINGLE, size: 1, color: 'E2E8F0' },
+      },
+      rows: [
+        new DocxTableRow({
+          tableHeader: true,
+          children: [
+            new DocxTableCell({
+              width: { size: 40, type: DocxWidthType.PERCENTAGE },
+              children: [new DocxParagraph({ spacing: { before: 60, after: 60, line: 240 }, children: [new DocxTextRun({ text: 'Chỉ số tổng quan đại diện', font: selectedFont, bold: true, size: 26 })] })],
+            }),
+            new DocxTableCell({
+              width: { size: 20, type: DocxWidthType.PERCENTAGE },
+              children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 60, after: 60, line: 240 }, children: [new DocxTextRun({ text: 'Số lượng thực tế', font: selectedFont, bold: true, size: 26 })] })],
+            }),
+            new DocxTableCell({
+              width: { size: 40, type: DocxWidthType.PERCENTAGE },
+              children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 60, after: 60, line: 240 }, children: [new DocxTextRun({ text: 'Biểu đồ tiến độ & Tỷ lệ đại diện', font: selectedFont, bold: true, size: 26 })] })],
+            }),
+          ],
+        }),
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new DocxParagraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: '1. Tổng nhiệm vụ tiếp nhận', font: selectedFont, bold: true, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: `${stats.totalTasks} việc`, font: selectedFont, bold: true, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: createVisualBar(100), font: selectedFont, size: 24 })] })] }),
+          ],
+        }),
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new DocxParagraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: '2. Đã hoàn thành nghiệm thu', font: selectedFont, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: `${stats.completedTasks} việc`, font: selectedFont, bold: true, color: '16A34A', size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: createVisualBar(stats.completionRate), font: selectedFont, bold: true, color: '16A34A', size: 24 })] })] }),
+          ],
+        }),
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new DocxParagraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: '3. Hoàn thành đúng hạn cam kết', font: selectedFont, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: `${stats.completedOnTime} việc`, font: selectedFont, bold: true, color: '2563EB', size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: createVisualBar(stats.onTimeRate), font: selectedFont, bold: true, color: '2563EB', size: 24 })] })] }),
+          ],
+        }),
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new DocxParagraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: '4. Hoàn thành trễ hạn', font: selectedFont, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: `${stats.completedLate} việc`, font: selectedFont, color: stats.completedLate > 0 ? 'DC2626' : '64748B', size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: createVisualBar(stats.totalTasks > 0 ? (stats.completedLate / stats.totalTasks) * 100 : 0), font: selectedFont, color: stats.completedLate > 0 ? 'DC2626' : '64748B', size: 24 })] })] }),
+          ],
+        }),
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new DocxParagraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: '5. Đang tiếp tục xử lý', font: selectedFont, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: `${stats.inProgressTasks} việc`, font: selectedFont, color: 'D97706', size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: createVisualBar(stats.totalTasks > 0 ? (stats.inProgressTasks / stats.totalTasks) * 100 : 0), font: selectedFont, color: 'D97706', size: 24 })] })] }),
+          ],
+        }),
+        new DocxTableRow({
+          children: [
+            new DocxTableCell({ children: [new DocxParagraph({ spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: '6. Tồn đọng từ kỳ trước chuyển sang', font: selectedFont, size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: `${stats.backlogTasks} việc`, font: selectedFont, color: '9333EA', size: 26 })] })] }),
+            new DocxTableCell({ children: [new DocxParagraph({ alignment: DocxAlignmentType.CENTER, spacing: { before: 40, after: 40, line: 240 }, children: [new DocxTextRun({ text: createVisualBar(stats.totalTasks > 0 ? (stats.backlogTasks / stats.totalTasks) * 100 : 0), font: selectedFont, color: '9333EA', size: 24 })] })] }),
+          ],
+        }),
+      ],
+    });
+
     const taskTable = new DocxTable({
       width: { size: 100, type: DocxWidthType.PERCENTAGE },
       borders: {
@@ -4033,7 +4113,9 @@ app.post('/api/reports/generate-docx', async (req: Request, res: Response) => {
         `- Số nhiệm vụ tồn đọng từ kỳ trước chuyển sang: ${stats.backlogTasks} nhiệm vụ.`,
         { size: 28, indentFirstLine: true }
       ),
-      makeAdminParagraph('2. Bảng kiểm kê chi tiết các nhiệm vụ thực hiện trong kỳ:', { bold: true, size: 28, indentFirstLine: true }),
+      makeAdminParagraph('Bảng chỉ số tổng quan đại diện và biểu đồ tiến độ:', { bold: true, size: 28, indentFirstLine: true }),
+      overviewMetricsTable,
+      makeAdminParagraph('2. Bảng kiểm kê chi tiết các nhiệm vụ thực hiện trong kỳ:', { bold: true, size: 28, indentFirstLine: true, spacingBefore: 120 }),
       taskTable,
 
       // III. Đánh giá: Ưu điểm, hạn chế, nguyên nhân

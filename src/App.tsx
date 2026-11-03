@@ -176,6 +176,25 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | undefined>(undefined);
 
+  // Sidebar collapsed state for full-screen workspace
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('taskmaster_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('taskmaster_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   // 2. Active User Account
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
@@ -1187,11 +1206,13 @@ export default function App() {
         onOpenCalendarSync={() => setIsCalendarSyncModalOpen(true)}
         isCalendarConnected={calendarSyncState.isConnected}
         onOpenReportModal={() => setIsReportModalOpen(true)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleSidebarCollapse}
       />
 
       {/* Right Column: Main Content Area + Footer */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#EEF2F6]">
-        <main className="flex-1 w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8">
+        <main className="flex-1 w-full px-3 sm:px-5 lg:px-6 py-4 sm:py-6 transition-all duration-300">
         {activeTab === 'overview' && (
           <DashboardOverview
             tasks={tasks}
