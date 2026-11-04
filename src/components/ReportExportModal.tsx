@@ -32,6 +32,7 @@ import {
 } from '../types/task';
 import { downloadCustomizedReportExcel } from '../utils/excelTemplate';
 import { exportCustomWordReportDocx } from '../utils/docxExport';
+import { calculateReportStatisticsForTasks } from '../utils/taskCalculations';
 import { ExcelTemplateModal } from './ExcelTemplateModal';
 
 interface ReportExportModalProps {
@@ -39,6 +40,8 @@ interface ReportExportModalProps {
   onClose: () => void;
   tasks: Task[];
   userProfile: UserProfile;
+  initialPeriodType?: ReportPeriodType;
+  initialTemplateLayout?: DocxTemplateLayout;
 }
 
 const FONT_OPTIONS = [
@@ -61,10 +64,13 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   onClose,
   tasks,
   userProfile,
+  initialPeriodType = 'month',
+  initialTemplateLayout = 'executive_summary',
 }) => {
   // Filter & Period State
-  const [periodType, setPeriodType] = useState<ReportPeriodType>('month');
+  const [periodType, setPeriodType] = useState<ReportPeriodType>(initialPeriodType);
   const now = new Date();
+  const [selectedDay, setSelectedDay] = useState<string>(now.toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [customStartDate, setCustomStartDate] = useState<string>(
@@ -192,7 +198,12 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   // Switch Layout Template presets
   const handleSelectTemplateLayout = (layout: DocxTemplateLayout) => {
     setTemplateLayout(layout);
-    if (layout === 'detailed_tasks') {
+    if (layout === 'archive_vault') {
+      setReportTitle('BÁO CÁO KẾT QUẢ THỰC HIỆN VÀ LƯU TRỮ NHIỆM VỤ HOÀN THÀNH');
+      setSection1Title('I. TỔNG HỢP CHỈ SỐ LƯU TRỮ & NGHIỆM THU (DỮ LIỆU CHUẨN)');
+      setSection2Title('II. BẢNG KIỂM KÊ DANH MỤC HỒ SƠ ĐÃ NGHIỆM THU VĨNH VIỄN');
+      setSection3Title('III. ĐÁNH GIÁ CHẤT LƯỢNG NGHIỆM THU & BÀN GIAO SẢN PHẨM');
+    } else if (layout === 'detailed_tasks') {
       setReportTitle('BÁO CÁO CHI TIẾT TÌNH HÌNH THỰC HIỆN NHIỆM VỤ');
       setSection1Title('I. TỔNG HỢP CHỈ SỐ THEO DÕI HỆ THỐNG');
       setSection2Title('II. BẢNG KIỂM KÊ TOÀN DIỆN CÁC ĐẦU VIỆC VÀ VIỆC CON');
@@ -215,101 +226,95 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [isExcelCustomModalOpen, setIsExcelCustomModalOpen] = useState(false);
 
+  // Sync initialPeriodType and initialTemplateLayout on open
+  useEffect(() => {
+    if (isOpen) {
+      if (initialPeriodType) {
+        setPeriodType(initialPeriodType);
+        if (initialPeriodType === 'archive') {
+          handleSelectTemplateLayout('archive_vault');
+        } else if (initialPeriodType === 'day') {
+          setReportTitle('BÁO CÁO HIỆU SUẤT CÔNG TÁC NGÀY');
+        } else if (initialPeriodType === 'week') {
+          setReportTitle('BÁO CÁO HIỆU SUẤT CÔNG TÁC TUẦN');
+        }
+      }
+      if (initialTemplateLayout) {
+        handleSelectTemplateLayout(initialTemplateLayout);
+      }
+    }
+  }, [isOpen, initialPeriodType, initialTemplateLayout]);
+
+  const handleSelectPeriodType = (newPeriod: ReportPeriodType) => {
+    setPeriodType(newPeriod);
+    if (newPeriod === 'archive') {
+      handleSelectTemplateLayout('archive_vault');
+    } else if (newPeriod === 'day') {
+      setReportTitle('BÁO CÁO HIỆU SUẤT CÔNG TÁC NGÀY');
+    } else if (newPeriod === 'week') {
+      setReportTitle('BÁO CÁO HIỆU SUẤT CÔNG TÁC TUẦN');
+    } else if (newPeriod === 'month') {
+      setReportTitle('BÁO CÁO KẾT QUẢ THỰC HIỆN CÔNG VIỆC THÁNG');
+    } else if (newPeriod === 'year') {
+      setReportTitle('BÁO CÁO KẾT QUẢ CÔNG TÁC NĂM');
+    }
+  };
+
   // Determine date range and label
-  const { dateRangeStart, dateRangeEnd, periodLabel } = useMemo(() => {
+  const { dateRangeStart, dateRangeEnd } = useMemo(() => {
     let start: Date;
     let end: Date;
-    let label = '';
 
-    if (periodType === 'month') {
+    if (periodType === 'day') {
+      const parts = selectedDay.split('-');
+      const y = Number(parts[0]) || now.getFullYear();
+      const m = (Number(parts[1]) || (now.getMonth() + 1)) - 1;
+      const d = Number(parts[2]) || now.getDate();
+      start = new Date(y, m, d, 0, 0, 0, 0);
+      end = new Date(y, m, d, 23, 59, 59, 999);
+    } else if (periodType === 'week') {
+      const currentDay = now.getDay();
+      const distanceToMon = currentDay === 0 ? -6 : 1 - currentDay;
+      const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + distanceToMon, 0, 0, 0, 0);
+      const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6, 23, 59, 59, 999);
+      start = mon;
+      end = sun;
+    } else if (periodType === 'month') {
       start = new Date(selectedYear, selectedMonth - 1, 1, 0, 0, 0);
       end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
-      label = `Tháng ${selectedMonth.toString().padStart(2, '0')}/${selectedYear}`;
     } else if (periodType === 'year') {
       start = new Date(selectedYear, 0, 1, 0, 0, 0);
       end = new Date(selectedYear, 11, 31, 23, 59, 59, 999);
-      label = `Năm ${selectedYear}`;
+    } else if (periodType === 'archive') {
+      start = new Date(2000, 0, 1, 0, 0, 0);
+      end = new Date(2099, 11, 31, 23, 59, 59, 999);
     } else {
       start = new Date(`${customStartDate}T00:00:00`);
       end = new Date(`${customEndDate}T23:59:59`);
-      label = `Từ ${new Date(customStartDate).toLocaleDateString('vi-VN')} đến ${new Date(customEndDate).toLocaleDateString('vi-VN')}`;
     }
 
     return {
       dateRangeStart: start,
       dateRangeEnd: end,
-      periodLabel: label,
     };
-  }, [periodType, selectedMonth, selectedYear, customStartDate, customEndDate]);
+  }, [periodType, selectedDay, selectedMonth, selectedYear, customStartDate, customEndDate]);
+
+  // Unified report statistics and tasks calculation
+  const { filteredTasks, stats, periodLabel, defaultSubtitle } = useMemo(() => {
+    return calculateReportStatisticsForTasks(tasks, {
+      periodType,
+      unit: selectedUnit,
+      startTime: dateRangeStart.getTime(),
+      endTime: dateRangeEnd.getTime(),
+    });
+  }, [tasks, periodType, selectedUnit, dateRangeStart, dateRangeEnd]);
 
   // Sync default subtitle when periodLabel changes
   useEffect(() => {
     if (!reportSubtitle || reportSubtitle.startsWith('Kỳ đánh giá:')) {
-      setReportSubtitle(`Kỳ đánh giá: ${periodLabel}`);
+      setReportSubtitle(defaultSubtitle || `Kỳ đánh giá: ${periodLabel}`);
     }
-  }, [periodLabel]);
-
-  // Filter tasks based on period and unit
-  const { filteredTasks, stats } = useMemo(() => {
-    const startTime = dateRangeStart.getTime();
-    const endTime = dateRangeEnd.getTime();
-
-    let pool = tasks;
-    if (selectedUnit !== 'all') {
-      pool = pool.filter((t) => t.unit === selectedUnit);
-    }
-
-    const relevantTasks: Task[] = [];
-    let completedInPeriodCount = 0;
-    let onTimeCount = 0;
-    let lateCount = 0;
-    let inProgressCount = 0;
-    let backlogCount = 0;
-
-    for (const t of pool) {
-      const createdTime = t.createdAt ? new Date(t.createdAt).getTime() : 0;
-      const completedTime = t.completedAt ? new Date(t.completedAt).getTime() : 0;
-      const dueTime = t.dueDate ? new Date(t.dueDate).getTime() : 0;
-
-      const isCompletedInPeriod = t.status === 'completed' && completedTime >= startTime && completedTime <= endTime;
-      const isCreatedInPeriod = createdTime >= startTime && createdTime <= endTime;
-      const isBacklog = createdTime < startTime && t.status !== 'completed';
-
-      if (isCompletedInPeriod || isCreatedInPeriod || isBacklog) {
-        relevantTasks.push(t);
-
-        if (t.status === 'completed') {
-          completedInPeriodCount++;
-          if (dueTime === 0 || completedTime <= dueTime) {
-            onTimeCount++;
-          } else {
-            lateCount++;
-          }
-        } else if (isBacklog) {
-          backlogCount++;
-        } else {
-          inProgressCount++;
-        }
-      }
-    }
-
-    const total = relevantTasks.length;
-    const completionRate = total > 0 ? Math.round((completedInPeriodCount / total) * 100) : 0;
-    const onTimeRate = completedInPeriodCount > 0 ? Math.round((onTimeCount / completedInPeriodCount) * 100) : 100;
-
-    const statistics: ReportStatistics = {
-      totalTasks: total,
-      completedTasks: completedInPeriodCount,
-      completedOnTime: onTimeCount,
-      completedLate: lateCount,
-      inProgressTasks: inProgressCount,
-      backlogTasks: backlogCount,
-      onTimeRate,
-      completionRate,
-    };
-
-    return { filteredTasks: relevantTasks, stats: statistics };
-  }, [tasks, dateRangeStart, dateRangeEnd, selectedUnit]);
+  }, [defaultSubtitle, periodLabel]);
 
   // AI Summary generator (Strictly grounded in real numbers)
   const handleGenerateAiSummary = async () => {
@@ -421,6 +426,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
           unitName: selectedUnit === 'all' ? 'Toàn bộ đơn vị' : selectedUnit,
           createdByName: signatoryName,
           customDocConfig: customConfig,
+          templateLayout,
         });
       }
 
@@ -723,6 +729,32 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                     </p>
                   </div>
                 </button>
+
+                {/* Option 4: Archive Vault Master */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectTemplateLayout('archive_vault')}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                    templateLayout === 'archive_vault'
+                      ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/20 shadow-xs'
+                      : 'border-slate-200 bg-slate-50/60 hover:bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg shrink-0 ${templateLayout === 'archive_vault' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">4. Lưu Trữ Nghiệm Thu (Archive Vault Master)</span>
+                      {templateLayout === 'archive_vault' && (
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      Định dạng chuẩn tổng hợp hồ sơ đã nghiệm thu, chỉ số hoàn thành đúng hạn cam kết và chốt lưu trữ vĩnh viễn.
+                    </p>
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -740,7 +772,26 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
 
               <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-lg text-xs font-semibold">
                 <button
-                  onClick={() => setPeriodType('month')}
+                  type="button"
+                  onClick={() => handleSelectPeriodType('day')}
+                  className={`py-1.5 rounded-md transition-colors cursor-pointer ${
+                    periodType === 'day' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Theo Ngày
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPeriodType('week')}
+                  className={`py-1.5 rounded-md transition-colors cursor-pointer ${
+                    periodType === 'week' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Theo Tuần
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPeriodType('month')}
                   className={`py-1.5 rounded-md transition-colors cursor-pointer ${
                     periodType === 'month' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -748,7 +799,8 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                   Theo Tháng
                 </button>
                 <button
-                  onClick={() => setPeriodType('year')}
+                  type="button"
+                  onClick={() => handleSelectPeriodType('year')}
                   className={`py-1.5 rounded-md transition-colors cursor-pointer ${
                     periodType === 'year' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -756,7 +808,17 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                   Theo Năm
                 </button>
                 <button
-                  onClick={() => setPeriodType('custom')}
+                  type="button"
+                  onClick={() => handleSelectPeriodType('archive')}
+                  className={`py-1.5 rounded-md transition-colors cursor-pointer ${
+                    periodType === 'archive' ? 'bg-white text-emerald-700 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Kho Lưu Trữ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPeriodType('custom')}
                   className={`py-1.5 rounded-md transition-colors cursor-pointer ${
                     periodType === 'custom' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -764,6 +826,42 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                   Tùy Chọn
                 </button>
               </div>
+
+              {periodType === 'day' && (
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500">Chọn ngày báo cáo:</label>
+                  <input
+                    type="date"
+                    value={selectedDay}
+                    onChange={(e) => setSelectedDay(e.target.value)}
+                    className="w-full text-xs font-medium px-2 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  />
+                </div>
+              )}
+
+              {periodType === 'week' && (
+                <div className="p-2.5 rounded-lg bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-900">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Tuần hiện tại (Thứ 2 đến Chủ Nhật)</span>
+                  </div>
+                  <p className="text-[11px] text-indigo-700 mt-0.5">
+                    Số liệu tổng hợp: {periodLabel}
+                  </p>
+                </div>
+              )}
+
+              {periodType === 'archive' && (
+                <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Kho Lưu Trữ Hồ Sơ Đã Nghiệm Thu</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    Đồng bộ 100% các nhiệm vụ đã hoàn thành đạt chuẩn trên hệ thống.
+                  </p>
+                </div>
+              )}
 
               {periodType === 'month' && (
                 <div className="grid grid-cols-2 gap-2">
@@ -982,6 +1080,18 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                   <div className="text-[11px] text-amber-700">Trễ hạn / Đang làm:</div>
                   <div className="font-extrabold text-amber-800 text-sm">
                     {stats.completedLate} trễ • {stats.inProgressTasks} đang làm
+                  </div>
+                </div>
+                <div className="bg-teal-50 p-2 rounded-lg border border-teal-200">
+                  <div className="text-[11px] text-teal-700">Thời gian xử lý TB:</div>
+                  <div className="font-extrabold text-teal-800 text-sm">
+                    {stats.avgLeadTimeHours !== undefined ? `${stats.avgLeadTimeHours} giờ/việc` : '---'}
+                  </div>
+                </div>
+                <div className="bg-indigo-50 p-2 rounded-lg border border-indigo-200">
+                  <div className="text-[11px] text-indigo-700">Tổng thời lượng công tác:</div>
+                  <div className="font-extrabold text-indigo-800 text-sm">
+                    {stats.totalExecutionHours !== undefined ? `${stats.totalExecutionHours} giờ` : '---'}
                   </div>
                 </div>
               </div>
@@ -1227,7 +1337,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                   </div>
 
                   {/* Overview Stats Mini Cards */}
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center pt-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-center pt-1">
                     <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
                       <div className="text-[10px] text-slate-500 font-medium">Tổng việc</div>
                       <div className="text-sm font-extrabold text-slate-800">{stats.totalTasks}</div>
@@ -1252,6 +1362,12 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                       <div className="text-[10px] text-purple-700 font-medium">Tồn đọng</div>
                       <div className="text-sm font-extrabold text-purple-700">{stats.backlogTasks}</div>
                     </div>
+                    <div className="bg-sky-50 p-2 rounded-lg border border-sky-200">
+                      <div className="text-[10px] text-sky-700 font-medium">Xử lý TB</div>
+                      <div className="text-sm font-extrabold text-sky-800">
+                        {stats.avgLeadTimeHours !== undefined ? `${stats.avgLeadTimeHours}h` : '---'}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1269,7 +1385,65 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                   {section3Title}
                 </h2>
                 <div className="overflow-x-auto">
-                  {templateLayout === 'detailed_tasks' ? (
+                  {templateLayout === 'archive_vault' ? (
+                    /* Layout 4: Archive Vault Dedicated Completed Table */
+                    <table
+                      className={`w-full text-left border-collapse ${
+                        hasBorderBox ? 'border border-slate-400' : 'border border-slate-200'
+                      }`}
+                      style={{ fontSize: `${Math.max(10, fontSizePt - 2)}pt` }}
+                    >
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-800 border-b border-slate-300">
+                          <th className="py-2 px-2 border border-slate-300 text-center w-8 font-bold">STT</th>
+                          <th className="py-2 px-2.5 border border-slate-300 font-bold min-w-[150px]">Tên nhiệm vụ đã nghiệm thu &amp; Hồ sơ</th>
+                          <th className="py-2 px-2 border border-slate-300 font-bold">Đơn vị</th>
+                          <th className="py-2 px-2 border border-slate-300 font-bold text-center">Ngày nghiệm thu</th>
+                          <th className="py-2 px-2 border border-slate-300 font-bold text-center">Đánh giá hạn</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {filteredTasks.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-4 text-center text-slate-400 italic">
+                              Chưa có nhiệm vụ đã nghiệm thu trong kho lưu trữ này.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredTasks.map((t, idx) => {
+                            const doneStr = t.completedAt
+                              ? new Date(t.completedAt).toLocaleDateString('vi-VN')
+                              : 'Đã nghiệm thu';
+                            const isOnTime = !t.dueDate || !t.completedAt || new Date(t.completedAt).getTime() <= new Date(t.dueDate).getTime();
+
+                            return (
+                              <tr key={t.id || idx} className="hover:bg-slate-50">
+                                <td className="py-1.5 px-2 border border-slate-300 text-center">{idx + 1}</td>
+                                <td className="py-1.5 px-2.5 border border-slate-300">
+                                  <div className="font-bold text-slate-900">{t.title}</div>
+                                  {t.description && (
+                                    <div className="text-[10px] text-slate-500 italic mt-0.5 line-clamp-2">{t.description}</div>
+                                  )}
+                                  {Array.isArray(t.subtasks) && t.subtasks.length > 0 && (
+                                    <div className="text-[9px] text-indigo-700 mt-1">
+                                      ✓ {t.subtasks.filter(st => st.completed).length}/{t.subtasks.length} hạng mục con đã hoàn thành
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-1.5 px-2 border border-slate-300 text-slate-600">{t.unit || 'Chung'}</td>
+                                <td className="py-1.5 px-2 border border-slate-300 text-center font-semibold text-emerald-700">{doneStr}</td>
+                                <td className="py-1.5 px-2 border border-slate-300 text-center font-bold">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] ${isOnTime ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                                    {isOnTime ? 'Đúng hạn' : 'Trễ hạn'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  ) : templateLayout === 'detailed_tasks' ? (
                     /* Layout 2: Detailed Task Inventory Table */
                     <table
                       className={`w-full text-left border-collapse ${

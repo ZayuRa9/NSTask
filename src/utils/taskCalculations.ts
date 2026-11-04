@@ -1,4 +1,4 @@
-import { Task, Subtask, TaskStatus, TaskTimeframeFilter, AIStrategicReview, StrategicRecommendation } from '../types/task';
+import { Task, Subtask, TaskStatus, TaskTimeframeFilter, AIStrategicReview, StrategicRecommendation, ReportPeriodType, ReportStatistics } from '../types/task';
 
 /**
  * Calculates percentage of completion from a list of subtasks.
@@ -1519,6 +1519,202 @@ export function generateLocalStrategicReview(tasks: Task[], now = new Date()): A
     bottlenecks,
     recommendations,
     analyzedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Unified calculation engine for administrative and performance reports.
+ * Used identically across ReportExportModal, ArchiveVault, and export utilities.
+ */
+export function calculateReportStatisticsForTasks(
+  tasks: Task[],
+  options: {
+    periodType?: ReportPeriodType;
+    unit?: string;
+    startTime?: number;
+    endTime?: number;
+    refDate?: Date;
+  } = {}
+): {
+  filteredTasks: Task[];
+  stats: ReportStatistics;
+  periodLabel: string;
+  defaultTitle: string;
+  defaultSubtitle: string;
+} {
+  const {
+    periodType = 'month',
+    unit = 'all',
+    startTime,
+    endTime,
+    refDate = new Date(),
+  } = options;
+
+  let pool = tasks;
+  if (unit !== 'all') {
+    pool = pool.filter((t) => t.unit === unit);
+  }
+
+  const now = refDate;
+  let sTime = startTime;
+  let eTime = endTime;
+  let label = '';
+  let title = 'BÁO CÁO KẾT QUẢ THỰC HIỆN CÔNG VIỆC';
+  let subtitle = '';
+
+  if (periodType === 'archive') {
+    // All completed / archived tasks
+    const relevantTasks = pool.filter(
+      (t) => t.status === 'completed' || t.progress === 100
+    );
+
+    let onTimeCount = 0;
+    let lateCount = 0;
+    let totalLeadTimeMs = 0;
+
+    for (const t of relevantTasks) {
+      const dueTime = t.dueDate ? new Date(t.dueDate).getTime() : 0;
+      const compTime = t.completedAt ? new Date(t.completedAt).getTime() : now.getTime();
+
+      if (dueTime === 0 || compTime <= dueTime) {
+        onTimeCount++;
+      } else {
+        lateCount++;
+      }
+      totalLeadTimeMs += getSafeTaskLeadDurationMs(t, compTime);
+    }
+
+    const total = relevantTasks.length;
+    const onTimeRate = total > 0 ? Math.round((onTimeCount / total) * 100) : 100;
+    const avgLeadHours = total > 0 ? Number((totalLeadTimeMs / (total * 3600000)).toFixed(1)) : 0;
+    const totalExecHours = Number((totalLeadTimeMs / 3600000).toFixed(1));
+
+    label = 'Kho Lưu Trữ Hồ Sơ Hoàn Thành';
+    title = 'BÁO CÁO KẾT QUẢ THỰC HIỆN VÀ LƯU TRỮ NHIỆM VỤ HOÀN THÀNH';
+    subtitle = `Kỳ đánh giá: Kho lưu trữ công việc đã nghiệm thu (${total} nhiệm vụ)`;
+
+    return {
+      filteredTasks: relevantTasks,
+      stats: {
+        totalTasks: total,
+        completedTasks: total,
+        completedOnTime: onTimeCount,
+        completedLate: lateCount,
+        inProgressTasks: 0,
+        backlogTasks: 0,
+        completionRate: 100,
+        onTimeRate,
+        avgLeadTimeHours: avgLeadHours,
+        totalExecutionHours: totalExecHours,
+      },
+      periodLabel: label,
+      defaultTitle: title,
+      defaultSubtitle: subtitle,
+    };
+  }
+
+  // Calculate time bounds for other period types if not explicitly provided
+  if (sTime === undefined || eTime === undefined) {
+    if (periodType === 'day') {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      sTime = startOfDay.getTime();
+      eTime = endOfDay.getTime();
+      label = `Ngày ${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+      title = 'BÁO CÁO HIỆU SUẤT CÔNG TÁC NGÀY';
+      subtitle = `Kỳ đánh giá: ${label}`;
+    } else if (periodType === 'week') {
+      const currentDay = now.getDay();
+      const distanceToMon = currentDay === 0 ? -6 : 1 - currentDay;
+      const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + distanceToMon, 0, 0, 0, 0);
+      const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6, 23, 59, 59, 999);
+      sTime = mon.getTime();
+      eTime = sun.getTime();
+      label = `Tuần (Ngày ${mon.getDate().toString().padStart(2, '0')}/${(mon.getMonth() + 1).toString().padStart(2, '0')} - ${sun.getDate().toString().padStart(2, '0')}/${(sun.getMonth() + 1).toString().padStart(2, '0')}/${sun.getFullYear()})`;
+      title = 'BÁO CÁO HIỆU SUẤT CÔNG TÁC TUẦN';
+      subtitle = `Kỳ đánh giá: ${label}`;
+    } else if (periodType === 'year') {
+      const startOfYear = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+      sTime = startOfYear.getTime();
+      eTime = endOfYear.getTime();
+      label = `Năm ${now.getFullYear()}`;
+      title = 'BÁO CÁO KẾT QUẢ CÔNG TÁC NĂM';
+      subtitle = `Kỳ đánh giá: ${label}`;
+    } else {
+      // month
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      sTime = startOfMonth.getTime();
+      eTime = endOfMonth.getTime();
+      label = `Tháng ${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+      title = 'BÁO CÁO KẾT QUẢ THỰC HIỆN CÔNG VIỆC THÁNG';
+      subtitle = `Kỳ đánh giá: ${label}`;
+    }
+  }
+
+  const relevantTasks: Task[] = [];
+  let completedInPeriodCount = 0;
+  let onTimeCount = 0;
+  let lateCount = 0;
+  let inProgressCount = 0;
+  let backlogCount = 0;
+  let totalLeadTimeMs = 0;
+
+  for (const t of pool) {
+    const createdTime = t.createdAt ? new Date(t.createdAt).getTime() : 0;
+    const completedTime = t.completedAt ? new Date(t.completedAt).getTime() : 0;
+    const dueTime = t.dueDate ? new Date(t.dueDate).getTime() : 0;
+
+    const isCompletedInPeriod =
+      (t.status === 'completed' || t.progress === 100) &&
+      completedTime >= sTime &&
+      completedTime <= eTime;
+    const isCreatedInPeriod = createdTime >= sTime && createdTime <= eTime;
+    const isBacklog = createdTime < sTime && t.status !== 'completed' && t.progress < 100;
+
+    if (isCompletedInPeriod || isCreatedInPeriod || isBacklog) {
+      relevantTasks.push(t);
+
+      if (t.status === 'completed' || t.progress === 100) {
+        completedInPeriodCount++;
+        if (dueTime === 0 || completedTime <= dueTime) {
+          onTimeCount++;
+        } else {
+          lateCount++;
+        }
+        totalLeadTimeMs += getSafeTaskLeadDurationMs(t, completedTime);
+      } else if (isBacklog) {
+        backlogCount++;
+      } else {
+        inProgressCount++;
+      }
+    }
+  }
+
+  const total = relevantTasks.length;
+  const completionRate = total > 0 ? Math.round((completedInPeriodCount / total) * 100) : 0;
+  const onTimeRate = completedInPeriodCount > 0 ? Math.round((onTimeCount / completedInPeriodCount) * 100) : 100;
+  const avgLeadHours = completedInPeriodCount > 0 ? Number((totalLeadTimeMs / (completedInPeriodCount * 3600000)).toFixed(1)) : 0;
+  const totalExecHours = Number((totalLeadTimeMs / 3600000).toFixed(1));
+
+  return {
+    filteredTasks: relevantTasks,
+    stats: {
+      totalTasks: total,
+      completedTasks: completedInPeriodCount,
+      completedOnTime: onTimeCount,
+      completedLate: lateCount,
+      inProgressTasks: inProgressCount,
+      backlogTasks: backlogCount,
+      onTimeRate,
+      completionRate,
+      avgLeadTimeHours: avgLeadHours,
+      totalExecutionHours: totalExecHours,
+    },
+    periodLabel: label,
+    defaultTitle: title,
+    defaultSubtitle: subtitle,
   };
 }
 

@@ -23,7 +23,8 @@ import {
   calculate30DaysCreationVsCompletionTrend,
   getSafeTaskLeadDurationMs,
   calculateDailyPerformanceSummary,
-  calculateWeeklyProductivityTrend
+  calculateWeeklyProductivityTrend,
+  calculateReportStatisticsForTasks
 } from './taskCalculations.ts';
 import { Task, Subtask, TaskTimeframeFilter } from '../types/task.ts';
 
@@ -809,6 +810,7 @@ test('calculateDailyPerformanceSummary accurately calculates today vs yesterday 
     {
       id: 'today-1',
       title: 'Created and completed today on time',
+      description: 'Mô tả công việc 1',
       unit: 'Ban Thanh Niên',
       createdAt: '2026-11-03T08:00:00Z',
       dueDate: '2026-11-03T17:00:00Z',
@@ -824,6 +826,7 @@ test('calculateDailyPerformanceSummary accurately calculates today vs yesterday 
     {
       id: 'today-2',
       title: 'Created today, pending',
+      description: 'Mô tả công việc 2',
       unit: 'Chi hội 1',
       createdAt: '2026-11-03T09:00:00Z',
       dueDate: '2026-11-05T17:00:00Z',
@@ -838,6 +841,7 @@ test('calculateDailyPerformanceSummary accurately calculates today vs yesterday 
     {
       id: 'yest-1',
       title: 'Created yesterday',
+      description: 'Mô tả công việc 3',
       unit: 'Ban Thanh Niên',
       createdAt: '2026-11-02T08:00:00Z',
       dueDate: '2026-11-04T17:00:00Z',
@@ -862,6 +866,180 @@ test('calculateDailyPerformanceSummary accurately calculates today vs yesterday 
   assert.ok(summary.avgHoursToday > 0);
   assert.ok(summary.todayStatusMessage.length > 0);
 });
+
+test('calculateReportStatisticsForTasks computes unified stats for archive mode', () => {
+  const tasks: Task[] = [
+    {
+      id: 'arch-1',
+      title: 'Đã hoàn thành đúng hạn',
+      description: 'Nội dung công việc nghiệm thu 1',
+      unit: 'Ban Thanh Niên',
+      createdAt: '2026-11-01T08:00:00Z',
+      dueDate: '2026-11-03T17:00:00Z',
+      completedAt: '2026-11-02T16:00:00Z',
+      status: 'completed',
+      priority: 'high',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+    {
+      id: 'arch-2',
+      title: 'Đã hoàn thành trễ hạn',
+      description: 'Nội dung công việc nghiệm thu 2',
+      unit: 'Ban Thanh Niên',
+      createdAt: '2026-10-25T08:00:00Z',
+      dueDate: '2026-10-28T17:00:00Z',
+      completedAt: '2026-10-30T10:00:00Z',
+      status: 'completed',
+      priority: 'medium',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+    {
+      id: 'active-1',
+      title: 'Đang tiến hành',
+      description: 'Nội dung công việc đang làm',
+      unit: 'Ban Thanh Niên',
+      createdAt: '2026-11-01T08:00:00Z',
+      dueDate: '2026-11-10T17:00:00Z',
+      status: 'in_progress',
+      priority: 'medium',
+      progress: 50,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+  ];
+
+  const result = calculateReportStatisticsForTasks(tasks, { periodType: 'archive' });
+
+  // Archive only includes completed tasks
+  assert.equal(result.filteredTasks.length, 2);
+  assert.equal(result.stats.totalTasks, 2);
+  assert.equal(result.stats.completedTasks, 2);
+  assert.equal(result.stats.completedOnTime, 1);
+  assert.equal(result.stats.completedLate, 1);
+  assert.equal(result.stats.onTimeRate, 50);
+  assert.equal(result.stats.completionRate, 100);
+  assert.ok((result.stats.avgLeadTimeHours || 0) > 0);
+  assert.ok((result.stats.totalExecutionHours || 0) > 0);
+  // Ensure no astronomical numbers like 997138.5
+  assert.ok((result.stats.avgLeadTimeHours || 0) < 500);
+});
+
+test('calculateReportStatisticsForTasks computes unified stats for day mode', () => {
+  const refDate = new Date('2026-11-04T12:00:00Z');
+  const tasks: Task[] = [
+    {
+      id: 'day-1',
+      title: 'Hoàn thành hôm nay',
+      description: 'Nhiệm vụ xong trong ngày',
+      unit: 'Ban Tổ Chức',
+      createdAt: '2026-11-04T08:00:00Z',
+      dueDate: '2026-11-04T17:00:00Z',
+      completedAt: '2026-11-04T16:00:00Z',
+      status: 'completed',
+      priority: 'high',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+    {
+      id: 'day-2',
+      title: 'Tạo hôm nay đang làm',
+      description: 'Nhiệm vụ bắt đầu trong ngày',
+      unit: 'Ban Tổ Chức',
+      createdAt: '2026-11-04T09:00:00Z',
+      dueDate: '2026-11-05T17:00:00Z',
+      status: 'in_progress',
+      priority: 'medium',
+      progress: 40,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+    {
+      id: 'other-day',
+      title: 'Nhiệm vụ tuần sau',
+      description: 'Nhiệm vụ cho tương lai',
+      unit: 'Ban Tổ Chức',
+      createdAt: '2026-11-15T08:00:00Z',
+      dueDate: '2026-11-20T17:00:00Z',
+      status: 'pending',
+      priority: 'low',
+      progress: 0,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+  ];
+
+  const result = calculateReportStatisticsForTasks(tasks, {
+    periodType: 'day',
+    refDate,
+  });
+
+  assert.equal(result.filteredTasks.length, 2);
+  assert.equal(result.stats.completedTasks, 1);
+  assert.equal(result.stats.inProgressTasks, 1);
+  assert.equal(result.stats.completedOnTime, 1);
+});
+
+test('calculateReportStatisticsForTasks prevents astronomical numbers from corrupt timestamps', () => {
+  const corruptTasks: Task[] = [
+    {
+      id: 'corrupt-1',
+      title: 'Task corrupt epoch 0',
+      description: 'Lỗi thời gian epoch 1970',
+      unit: 'Chung',
+      createdAt: '1970-01-01T00:00:00Z', // epoch 0
+      dueDate: '2026-11-04T17:00:00Z',
+      completedAt: '2026-11-04T12:00:00Z',
+      status: 'completed',
+      priority: 'medium',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+    {
+      id: 'corrupt-2',
+      title: 'Task no createdAt',
+      description: 'Không có ngày tạo',
+      unit: 'Chung',
+      createdAt: '',
+      dueDate: '2026-11-04T17:00:00Z',
+      completedAt: '2026-11-04T12:00:00Z',
+      status: 'completed',
+      priority: 'low',
+      progress: 100,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: false, minutesBefore: 0 },
+    },
+  ];
+
+  const result = calculateReportStatisticsForTasks(corruptTasks, { periodType: 'archive' });
+  // avgLeadTimeHours should be clamped safely (<= 720 hours) and not 62321.2 or 997138.5
+  assert.ok(result.stats.avgLeadTimeHours !== undefined);
+  assert.ok(result.stats.avgLeadTimeHours <= 720);
+  assert.ok(result.stats.avgLeadTimeHours >= 0.5);
+  assert.ok((result.stats.totalExecutionHours || 0) <= 1440);
+});
+
 
 
 

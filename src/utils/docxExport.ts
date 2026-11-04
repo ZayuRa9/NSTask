@@ -11,8 +11,8 @@ import {
   AlignmentType,
   convertMillimetersToTwip,
 } from 'docx';
-import { Task, UserProfile, ReportStatistics, WordReportCustomConfig } from '../types/task';
-import { formatDateVietnamese } from './taskCalculations';
+import { Task, UserProfile, ReportStatistics, WordReportCustomConfig, DocxTemplateLayout } from '../types/task';
+import { formatDateVietnamese, calculateReportStatisticsForTasks } from './taskCalculations';
 
 /**
  * Removes any markdown asterisks * and brackets [] from administrative text
@@ -249,6 +249,66 @@ export function createOverviewMetricsChartTable(stats: ReportStatistics): Table 
           }),
         ],
       }),
+      ...(stats.avgLeadTimeHours !== undefined && stats.avgLeadTimeHours > 0
+        ? [
+            new TableRow({
+              children: [
+                new TableCell({
+                  borders: tableBorderCell,
+                  children: [
+                    new Paragraph({
+                      spacing: { before: 40, after: 40, line: 240 },
+                      children: [
+                        new TextRun({
+                          text: '7. Thời gian thực hiện trung bình',
+                          font: 'Times New Roman',
+                          bold: true,
+                          size: 26,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+                new TableCell({
+                  borders: tableBorderCell,
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 40, after: 40, line: 240 },
+                      children: [
+                        new TextRun({
+                          text: `${stats.avgLeadTimeHours} giờ/việc`,
+                          font: 'Times New Roman',
+                          bold: true,
+                          color: '0D9488',
+                          size: 26,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+                new TableCell({
+                  borders: tableBorderCell,
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 40, after: 40, line: 240 },
+                      children: [
+                        new TextRun({
+                          text: `~${(stats.avgLeadTimeHours / 24).toFixed(1)} ngày công`,
+                          font: 'Times New Roman',
+                          italics: true,
+                          color: '0D9488',
+                          size: 24,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ]
+        : []),
     ],
   });
 }
@@ -624,12 +684,36 @@ export async function exportTaskToDocx(task: Task, user?: UserProfile): Promise<
 }
 
 /**
- * Exports a master summary of ALL completed tasks into a single comprehensive DOCX report.
+ * Exports a master summary of ALL completed tasks into a single comprehensive DOCX report
+ * using the unified calculation engine and administrative template.
  */
 export async function exportAllCompletedTasksToDocx(
   tasks: Task[],
   user?: UserProfile
 ): Promise<Blob> {
+  const result = calculateReportStatisticsForTasks(tasks, { periodType: 'archive' });
+  return exportCustomWordReportDocx({
+    tasks: result.filteredTasks,
+    statistics: result.stats,
+    reportTitle: result.defaultTitle,
+    periodLabel: result.periodLabel,
+    unitName: user?.units?.[0] || 'KHO LƯU TRỮ HỒ SƠ',
+    createdByName: user?.displayName || 'Cán bộ quản lý',
+    templateLayout: 'archive_vault',
+    customDocConfig: {
+      reportTitle: result.defaultTitle,
+      reportSubtitle: result.defaultSubtitle,
+      signatoryTitle: 'CÁN BỘ PHỤ TRÁCH LƯU TRỮ',
+      signatoryName: user?.displayName || 'Nguyễn Văn A',
+      aiSummary: `Kho lưu trữ ghi nhận toàn bộ ${result.stats.completedTasks} nhiệm vụ đã được nghiệm thu và số hóa hồ sơ đầy đủ. Tỷ lệ hoàn thành đúng hạn cam kết đạt ${result.stats.onTimeRate}%.`,
+      futureDirections: 'Tiếp tục duy trì quy trình kiểm tra, số hóa và lưu trữ đồng bộ trên hệ thống.',
+    },
+  });
+}
+
+// @ts-ignore
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function _unusedLegacyCompletedExport(tasks: Task[], user?: UserProfile): Promise<Blob> {
   const completedTasks = tasks.filter((t) => t.status === 'completed' || t.progress === 100);
 
   const onTimeCount = completedTasks.filter((t) => {
@@ -1026,6 +1110,7 @@ export async function exportCustomWordReportDocx(params: {
   unitName?: string;
   createdByName?: string;
   customDocConfig?: Partial<WordReportCustomConfig>;
+  templateLayout?: DocxTemplateLayout;
 }): Promise<Blob> {
   const {
     tasks,
@@ -1035,6 +1120,7 @@ export async function exportCustomWordReportDocx(params: {
     unitName = 'Toàn bộ đơn vị',
     createdByName = 'Cán bộ quản lý',
     customDocConfig = {},
+    templateLayout = 'executive_summary',
   } = params;
 
   const governingBody = cleanAdministrativeText(customDocConfig.governingBody || 'ỦY BAN NHÂN DÂN / ĐƠN VỊ CẤP TRÊN');
@@ -1118,12 +1204,92 @@ export async function exportCustomWordReportDocx(params: {
     ],
   });
 
+  const isArchiveLayout = templateLayout === 'archive_vault';
+
   // Task Rows for detailed inventory
   const taskRows = tasks.map((t, idx) => {
     let statusText = 'Đang thực hiện';
     if (t.status === 'completed') statusText = 'Đã hoàn thành';
     else if (t.status === 'pending') statusText = 'Chờ xử lý';
     else if (t.status === 'overdue') statusText = 'Trễ hạn';
+
+    const isOnTime = !t.dueDate || !t.completedAt || new Date(t.completedAt).getTime() <= new Date(t.dueDate).getTime();
+
+    if (isArchiveLayout) {
+      return new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 6, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 40, after: 40, line: 240 },
+                children: [new TextRun({ text: String(idx + 1), font: 'Times New Roman', size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 42, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                spacing: { before: 40, after: 40, line: 240 },
+                children: [new TextRun({ text: cleanAdministrativeText(t.title), font: 'Times New Roman', bold: true, size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                spacing: { before: 40, after: 40, line: 240 },
+                children: [new TextRun({ text: cleanAdministrativeText(t.unit || 'Chung'), font: 'Times New Roman', size: 26 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 18, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 40, after: 40, line: 240 },
+                children: [
+                  new TextRun({
+                    text: t.completedAt ? formatDateVietnamese(t.completedAt) : 'Đã nghiệm thu',
+                    font: 'Times New Roman',
+                    color: '16A34A',
+                    bold: true,
+                    size: 26,
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 14, type: WidthType.PERCENTAGE },
+            borders: tableBorderCell,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 40, after: 40, line: 240 },
+                children: [
+                  new TextRun({
+                    text: isOnTime ? 'Đúng hạn' : 'Trễ hạn',
+                    font: 'Times New Roman',
+                    bold: true,
+                    color: isOnTime ? '16A34A' : 'DC2626',
+                    size: 26,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      });
+    }
 
     return new TableRow({
       children: [
@@ -1198,61 +1364,117 @@ export async function exportCustomWordReportDocx(params: {
     rows: [
       new TableRow({
         tableHeader: true,
-        children: [
-          new TableCell({
-            width: { size: 6, type: WidthType.PERCENTAGE },
-            borders: tableBorderCell,
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 60, after: 60, line: 240 },
-                children: [new TextRun({ text: 'STT', font: 'Times New Roman', bold: true, size: 26 })],
+        children: isArchiveLayout
+          ? [
+              new TableCell({
+                width: { size: 6, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'STT', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 42, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Tên nhiệm vụ đã nghiệm thu', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 20, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Đơn vị thực hiện', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 18, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Ngày nghiệm thu', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 14, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Tiến độ', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+            ]
+          : [
+              new TableCell({
+                width: { size: 6, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'STT', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 40, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Nội dung nhiệm vụ', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 18, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Đơn vị', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 18, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Hạn hoàn thành', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
+              }),
+              new TableCell({
+                width: { size: 18, type: WidthType.PERCENTAGE },
+                borders: tableBorderCell,
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 60, line: 240 },
+                    children: [new TextRun({ text: 'Trạng thái', font: 'Times New Roman', bold: true, size: 26 })],
+                  }),
+                ],
               }),
             ],
-          }),
-          new TableCell({
-            width: { size: 40, type: WidthType.PERCENTAGE },
-            borders: tableBorderCell,
-            children: [
-              new Paragraph({
-                spacing: { before: 60, after: 60, line: 240 },
-                children: [new TextRun({ text: 'Nội dung nhiệm vụ', font: 'Times New Roman', bold: true, size: 26 })],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 18, type: WidthType.PERCENTAGE },
-            borders: tableBorderCell,
-            children: [
-              new Paragraph({
-                spacing: { before: 60, after: 60, line: 240 },
-                children: [new TextRun({ text: 'Đơn vị', font: 'Times New Roman', bold: true, size: 26 })],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 18, type: WidthType.PERCENTAGE },
-            borders: tableBorderCell,
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 60, after: 60, line: 240 },
-                children: [new TextRun({ text: 'Hạn hoàn thành', font: 'Times New Roman', bold: true, size: 26 })],
-              }),
-            ],
-          }),
-          new TableCell({
-            width: { size: 18, type: WidthType.PERCENTAGE },
-            borders: tableBorderCell,
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 60, after: 60, line: 240 },
-                children: [new TextRun({ text: 'Trạng thái', font: 'Times New Roman', bold: true, size: 26 })],
-              }),
-            ],
-          }),
-        ],
       }),
       ...taskRows,
     ],

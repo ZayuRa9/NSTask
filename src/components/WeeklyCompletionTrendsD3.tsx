@@ -10,7 +10,7 @@ import {
   BarChart2
 } from 'lucide-react';
 import { Task, UserProfile } from '../types/task';
-import { isTaskOverdue } from '../utils/taskCalculations';
+import { isTaskOverdue, getSafeTaskLeadDurationMs } from '../utils/taskCalculations';
 
 interface WeeklyCompletionTrendsD3Props {
   tasks: Task[];
@@ -102,12 +102,11 @@ export const WeeklyCompletionTrendsD3: React.FC<WeeklyCompletionTrendsD3Props> =
       // Tính thời gian thực hiện trung bình trong tuần
       let totalExecutionHours = 0;
       tasksCompletedInWeek.forEach((t) => {
-        if (t.completedAt && t.createdAt) {
-          const diffMs = Math.max(0, new Date(t.completedAt).getTime() - new Date(t.createdAt).getTime());
-          totalExecutionHours += diffMs / (1000 * 60 * 60);
-        } else {
-          totalExecutionHours += 4; // Mặc định ước lượng 4h nếu thiếu timestamp
-        }
+        const compTime = t.completedAt
+          ? new Date(t.completedAt).getTime()
+          : (t.dueDate ? new Date(t.dueDate).getTime() : 0);
+        const duration = getSafeTaskLeadDurationMs(t, compTime);
+        totalExecutionHours += duration / (1000 * 60 * 60);
       });
 
       const completedCount = tasksCompletedInWeek.length;

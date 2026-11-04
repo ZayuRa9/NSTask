@@ -18,7 +18,7 @@ import {
   FileCheck2,
   Check
 } from 'lucide-react';
-import { Task, UserProfile } from '../types/task';
+import { Task, UserProfile, ReportPeriodType } from '../types/task';
 import { formatDateVietnamese } from '../utils/taskCalculations';
 import { downloadTaskDocx, downloadAllCompletedTasksDocx } from '../utils/docxExport';
 import { getUnitColorStyle } from '../utils/unitTheme';
@@ -29,6 +29,7 @@ interface ArchiveVaultProps {
   onRestoreTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onOpenCreateModal: () => void;
+  onOpenReportModal?: (period?: ReportPeriodType) => void;
 }
 
 export const ArchiveVault: React.FC<ArchiveVaultProps> = ({
@@ -37,6 +38,7 @@ export const ArchiveVault: React.FC<ArchiveVaultProps> = ({
   onRestoreTask,
   onDeleteTask,
   onOpenCreateModal,
+  onOpenReportModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -104,14 +106,25 @@ export const ArchiveVault: React.FC<ArchiveVaultProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {onOpenReportModal && (
+            <button
+              onClick={() => onOpenReportModal('archive')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs sm:text-sm font-extrabold shadow-lg shadow-emerald-950/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
+              title="Mở trình tùy biến thể thức & xuất mẫu báo cáo Word lưu trữ theo Nghị định 30/2020/NĐ-CP"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950" />
+              <span>Tùy Chỉnh &amp; Xuất Mẫu DOCX...</span>
+            </button>
+          )}
+
           <button
             onClick={handleDownloadAllMasterWord}
             disabled={completedTasks.length === 0 || isDownloadingAll}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs sm:text-sm font-bold backdrop-blur-md transition-all cursor-pointer disabled:opacity-50 hover:scale-105 active:scale-95"
-            title="Xuất file DOCX tổng hợp toàn bộ các nhiệm vụ đã hoàn thành"
+            title="Xuất file DOCX tổng hợp toàn bộ các nhiệm vụ đã hoàn thành theo mẫu chuẩn"
           >
             <FileText className="w-4 h-4 text-emerald-300" />
-            <span>{isDownloadingAll ? 'Đang tạo tổng hợp...' : 'Xuất Báo Cáo Tổng Hợp DOCX'}</span>
+            <span>{isDownloadingAll ? 'Đang tạo tổng hợp...' : 'Xuất Nhanh DOCX'}</span>
             <Download className="w-3.5 h-3.5" />
           </button>
 

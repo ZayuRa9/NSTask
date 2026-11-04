@@ -13,7 +13,7 @@ import { CalendarSyncModal } from './components/CalendarSyncModal';
 import { WordExcelImportModal } from './components/WordExcelImportModal';
 import { DocumentManagerView } from './components/DocumentManagerView';
 import { ReportExportModal } from './components/ReportExportModal';
-import { Task, UserProfile, UserAccount, Note, ExternalCalendarEvent, TaskTimeframeFilter } from './types/task';
+import { Task, UserProfile, UserAccount, Note, ExternalCalendarEvent, TaskTimeframeFilter, ReportPeriodType } from './types/task';
 import {
   getStoredSyncState,
   getCalendarAccessToken,
@@ -281,6 +281,7 @@ export default function App() {
   const [isCalendarSyncModalOpen, setIsCalendarSyncModalOpen] = useState(false);
   const [isWordExcelImportModalOpen, setIsWordExcelImportModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportModalPeriod, setReportModalPeriod] = useState<ReportPeriodType>('month');
   const [externalCalendarEvents, setExternalCalendarEvents] = useState<ExternalCalendarEvent[]>([]);
   const [calendarSyncState, setCalendarSyncState] = useState(() => getStoredSyncState());
 
@@ -1277,6 +1278,10 @@ export default function App() {
             onRestoreTask={handleRestoreTask}
             onDeleteTask={handleDeleteTask}
             onOpenCreateModal={handleOpenCreateModal}
+            onOpenReportModal={(period) => {
+              setReportModalPeriod(period || 'archive');
+              setIsReportModalOpen(true);
+            }}
           />
         )}
 
@@ -1432,6 +1437,7 @@ export default function App() {
         onClose={() => setIsReportModalOpen(false)}
         tasks={tasks}
         userProfile={userProfile}
+        initialPeriodType={reportModalPeriod}
       />
     </div>
   );

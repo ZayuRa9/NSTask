@@ -460,7 +460,7 @@ export interface DocumentTableStructure {
  * Word Report & Custom Template Types
  * -----------------------------------------------------------------------------
  */
-export type ReportPeriodType = 'month' | 'year' | 'custom';
+export type ReportPeriodType = 'day' | 'week' | 'month' | 'year' | 'archive' | 'custom';
 
 export interface ReportTemplate {
   id: string;
@@ -493,9 +493,11 @@ export interface ReportStatistics {
   backlogTasks: number;
   onTimeRate: number;
   completionRate: number;
+  avgLeadTimeHours?: number;
+  totalExecutionHours?: number;
 }
 
-export type DocxTemplateLayout = 'executive_summary' | 'detailed_tasks' | 'project_timeline';
+export type DocxTemplateLayout = 'executive_summary' | 'detailed_tasks' | 'project_timeline' | 'archive_vault';
 
 export interface DocFolder {
   id: string;
