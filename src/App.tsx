@@ -13,6 +13,7 @@ import { CalendarSyncModal } from './components/CalendarSyncModal';
 import { WordExcelImportModal } from './components/WordExcelImportModal';
 import { DocumentManagerView } from './components/DocumentManagerView';
 import { ReportExportModal } from './components/ReportExportModal';
+import { QuickVoiceModal } from './components/QuickVoiceModal';
 import { Task, UserProfile, UserAccount, Note, ExternalCalendarEvent, TaskTimeframeFilter, ReportPeriodType } from './types/task';
 import {
   getStoredSyncState,
@@ -284,6 +285,7 @@ export default function App() {
   const [reportModalPeriod, setReportModalPeriod] = useState<ReportPeriodType>('month');
   const [externalCalendarEvents, setExternalCalendarEvents] = useState<ExternalCalendarEvent[]>([]);
   const [calendarSyncState, setCalendarSyncState] = useState(() => getStoredSyncState());
+  const [isQuickVoiceModalOpen, setIsQuickVoiceModalOpen] = useState(false);
 
   // 4. User Profile
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
@@ -1145,6 +1147,54 @@ export default function App() {
     setIsModalOpen(true);
   };
 
+  const handleCreateTaskWithVoice = (text: string) => {
+    const defaultUnit = userProfile.units[0] || 'Ban Thanh Niên';
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 3);
+    const newTask: Partial<Task> = {
+      id: `task_${Date.now()}`,
+      title: text.trim(),
+      description: '',
+      unit: defaultUnit,
+      priority: 'medium',
+      status: 'pending',
+      progress: 0,
+      subtasks: [],
+      attachments: [],
+      links: [],
+      reminder: { enabled: true, minutesBefore: 60 },
+      createdAt: new Date().toISOString(),
+      dueDate: dueDate.toISOString().slice(0, 10),
+      source: 'app',
+    };
+    setEditingTask(newTask as Task);
+    setIsModalOpen(true);
+  };
+
+  const handleCreateNoteWithVoice = (text: string) => {
+    const trimmed = text.trim();
+    const firstLine = trimmed.split('\n')[0].trim();
+    const noteTitle = firstLine.length > 50 ? `${firstLine.slice(0, 47)}...` : (firstLine || 'Ghi chú mới');
+    const newNote: Note = {
+      id: `note_${Date.now()}`,
+      ownerId: currentUser?.id || 'default_user',
+      title: noteTitle,
+      content: trimmed,
+      color: '#FFFFFF',
+      labels: ['Công việc'],
+      checklistItems: [],
+      checklist: [],
+      linkedTaskIds: [],
+      isPinned: false,
+      isArchived: false,
+      isDeleted: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setSelectedNoteForEdit(newNote);
+    setIsNoteModalOpen(true);
+  };
+
   const handleNavigateToTasks = (
     filter?: 'all' | 'in_progress' | 'overdue' | 'completed',
     timeframe?: TaskTimeframeFilter
@@ -1207,6 +1257,7 @@ export default function App() {
         onOpenCalendarSync={() => setIsCalendarSyncModalOpen(true)}
         isCalendarConnected={calendarSyncState.isConnected}
         onOpenReportModal={() => setIsReportModalOpen(true)}
+        onOpenQuickVoice={() => setIsQuickVoiceModalOpen(true)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebarCollapse}
       />
@@ -1228,6 +1279,7 @@ export default function App() {
             onOpenCalendarSync={() => setIsCalendarSyncModalOpen(true)}
             onOpenWordExcelImport={() => setIsWordExcelImportModalOpen(true)}
             onOpenReportModal={() => setIsReportModalOpen(true)}
+            onOpenQuickVoice={() => setIsQuickVoiceModalOpen(true)}
           />
         )}
 
@@ -1438,6 +1490,14 @@ export default function App() {
         tasks={tasks}
         userProfile={userProfile}
         initialPeriodType={reportModalPeriod}
+      />
+
+      {/* Voice-to-Text Quick Creation Modal */}
+      <QuickVoiceModal
+        isOpen={isQuickVoiceModalOpen}
+        onClose={() => setIsQuickVoiceModalOpen(false)}
+        onCreateTaskWithVoice={handleCreateTaskWithVoice}
+        onCreateNoteWithVoice={handleCreateNoteWithVoice}
       />
     </div>
   );

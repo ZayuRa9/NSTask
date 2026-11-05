@@ -23,6 +23,7 @@ import {
   Link2,
   ChevronLeft,
   ChevronRight,
+  Mic,
 } from 'lucide-react';
 import { UserProfile, UserAccount } from '../types/task';
 import { playNotificationSound } from '../utils/audioNotification';
@@ -50,6 +51,7 @@ interface SidebarProps {
   onOpenCalendarSync?: () => void;
   isCalendarConnected?: boolean;
   onOpenReportModal?: () => void;
+  onOpenQuickVoice?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -75,6 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCalendarSync,
   isCalendarConnected,
   onOpenReportModal,
+  onOpenQuickVoice,
   isCollapsed = false,
   onToggleCollapse,
 }) => {
@@ -381,6 +384,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
                 {!isCollapsed && <span className="truncate">Báo cáo Word (.docx)</span>}
               </div>
+            </button>
+          )}
+
+          {/* Quick Voice Input Button */}
+          {onOpenQuickVoice && (
+            <button
+              onClick={() => {
+                onOpenQuickVoice();
+                setIsMobileOpen(false);
+              }}
+              title="Nhập bằng giọng nói (Voice-to-Text)"
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center p-3' : 'justify-between px-3.5 py-2.5'
+              } rounded-xl text-xs font-semibold text-rose-200 bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/50 transition-all cursor-pointer group`}
+            >
+              <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-2.5 min-w-0'}`}>
+                <Mic className="w-4 h-4 text-rose-400 shrink-0 group-hover:scale-110 transition-transform" />
+                {!isCollapsed && <span className="truncate">Nhập giọng nói</span>}
+              </div>
+              {!isCollapsed && (
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  Voice
+                </span>
+              )}
             </button>
           )}
         </div>

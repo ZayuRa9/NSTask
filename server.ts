@@ -30,31 +30,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function getAppPort(): number {
-  const portArgIndex = process.argv.indexOf('--port');
-  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
-    const parsed = parseInt(process.argv[portArgIndex + 1], 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  if (process.env.DEFAULT_APP_PORT) {
-    const parsed = parseInt(process.env.DEFAULT_APP_PORT, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+  for (let i = 0; i < process.argv.length; i++) {
+    const arg = process.argv[i];
+    if (arg === '--port' && process.argv[i + 1]) {
+      const parsed = parseInt(process.argv[i + 1], 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    if (arg.startsWith('--port=')) {
+      const parsed = parseInt(arg.split('=')[1], 10);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
   }
   if (process.env.APP_PORT) {
     const parsed = parseInt(process.env.APP_PORT, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  // If explicitly production and PORT is defined and not the nginx port (8080)
-  if (process.env.NODE_ENV === 'production' && process.env.PORT && process.env.PORT !== '8080') {
-    const parsed = parseInt(process.env.PORT, 10);
     if (!isNaN(parsed) && parsed > 0) return parsed;
   }
   return 3000;
 }
 
 function getAppHost(): string {
-  const hostArgIndex = process.argv.indexOf('--host');
-  if (hostArgIndex !== -1 && process.argv[hostArgIndex + 1]) {
-    return process.argv[hostArgIndex + 1];
+  for (let i = 0; i < process.argv.length; i++) {
+    const arg = process.argv[i];
+    if (arg === '--host' && process.argv[i + 1]) {
+      return process.argv[i + 1];
+    }
+    if (arg.startsWith('--host=')) {
+      return arg.split('=')[1];
+    }
   }
   return '0.0.0.0';
 }
@@ -4280,7 +4282,10 @@ async function startServer() {
   if (!isProduction) {
     const { createServer } = await import('vite');
     const vite = await createServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

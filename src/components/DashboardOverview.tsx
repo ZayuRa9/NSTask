@@ -29,7 +29,8 @@ import {
   StickyNote,
   Pin,
   FileSpreadsheet,
-  FileText
+  FileText,
+  Mic,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -96,6 +97,7 @@ interface DashboardOverviewProps {
   onOpenCalendarSync?: () => void;
   onOpenWordExcelImport?: () => void;
   onOpenReportModal?: () => void;
+  onOpenQuickVoice?: () => void;
   onUpdateWeeklyGoal?: (goal: number) => void;
 }
 
@@ -113,6 +115,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenCalendarSync,
   onOpenWordExcelImport,
   onOpenReportModal,
+  onOpenQuickVoice,
   onUpdateWeeklyGoal,
 }) => {
   const stats = calculateDashboardStats(tasks);
@@ -343,8 +346,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       </div>
 
-      {/* HÀNG 2: 5 NHÓM CHỨC NĂNG PHÂN BỔ ĐỀU 5 CỘT ĐỒNG NHẤT VỚI MÀU SẮC ĐẶC TRƯNG */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 w-full">
+      {/* HÀNG 2: CÁC NHÓM CÔNG CỤ NHANH PHÂN BỔ ĐỒNG NHẤT VỚI MÀU SẮC ĐẶC TRƯNG */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 w-full">
         {/* 1. Google Lịch */}
         <button
           type="button"
@@ -439,7 +442,34 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </button>
 
-        {/* 5. Tạo việc mới */}
+        {/* 5. Nhập Giọng Nói */}
+        {onOpenQuickVoice && (
+          <button
+            type="button"
+            onClick={onOpenQuickVoice}
+            className="flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl border-2 border-rose-200/90 bg-gradient-to-br from-rose-50/90 via-white to-pink-50/70 hover:border-rose-400 hover:shadow-md text-left transition-all duration-200 group cursor-pointer active:scale-98 shadow-xs"
+            title="Nói vào micro để tạo việc hoặc ghi chú tức thì qua Web Speech API"
+          >
+            <div className="flex items-center justify-between w-full">
+              <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                <Mic className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-[10px] font-black uppercase text-rose-800 bg-rose-100 px-1.5 py-0.5 rounded-md">
+                Voice
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="font-extrabold text-xs sm:text-sm text-slate-900 group-hover:text-rose-700 transition-colors">
+                Nhập Giọng Nói
+              </div>
+              <p className="text-[11px] text-rose-700/80 font-medium line-clamp-1 mt-0.5">
+                Nói để tạo việc &amp; ghi chú
+              </p>
+            </div>
+          </button>
+        )}
+
+        {/* 6. Tạo việc mới */}
         <button
           type="button"
           onClick={() => onOpenCreateModal()}

@@ -44,6 +44,7 @@ import { downloadExcelTaskTemplate, parseExcelTasks } from '../utils/excelTempla
 import { parseDocumentTasks } from '../utils/documentTaskParser';
 import { FormattingToolbar } from './FormattingToolbar';
 import { FormattedContentRenderer } from './FormattedContentRenderer';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface TaskFormModalProps {
   isOpen: boolean;
@@ -897,42 +898,61 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             </div>
           )}
 
-          {/* 1. Tên Nhiệm vụ + Nút AI Tinh chỉnh */}
+          {/* 1. Tên Nhiệm vụ + Nút AI Tinh chỉnh + Nút Giọng nói */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Tên Nhiệm vụ <span className="text-rose-500">*</span>
               </label>
-              <button
-                id="ai-refine-task-button"
-                type="button"
-                onClick={handleRefineTaskWithAI}
-                disabled={isRefiningTask || (!title.trim() && !description.trim())}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 transition-all cursor-pointer disabled:opacity-50"
-                title="AI tham mưu tên & mô tả hành động sắc bén cho kế hoạch của bạn"
-              >
-                {isRefiningTask ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Đang tham mưu...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>AI Tham mưu tên &amp; mô tả</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <VoiceInputButton
+                  currentValue={title}
+                  onTranscript={(newText) => setTitle(newText)}
+                  mode="replace"
+                  tooltip="Nói tên nhiệm vụ để điền nhanh"
+                  buttonText="Nói tên việc"
+                />
+                <button
+                  id="ai-refine-task-button"
+                  type="button"
+                  onClick={handleRefineTaskWithAI}
+                  disabled={isRefiningTask || (!title.trim() && !description.trim())}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 transition-all cursor-pointer disabled:opacity-50"
+                  title="AI tham mưu tên & mô tả hành động sắc bén cho kế hoạch của bạn"
+                >
+                  {isRefiningTask ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Đang tham mưu...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>AI Tham mưu tên &amp; mô tả</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            <input
-              id="task-title-input"
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="VD: Soạn thảo kế hoạch kiểm tra liên ngành, Chuẩn bị nội dung báo cáo quý 2..."
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-hidden font-medium text-slate-900 placeholder:text-slate-400"
-            />
+            <div className="relative">
+              <input
+                id="task-title-input"
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="VD: Soạn thảo kế hoạch kiểm tra liên ngành, Chuẩn bị nội dung báo cáo quý 2..."
+                className="w-full pl-4 pr-11 py-2.5 rounded-xl border border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20 outline-hidden font-medium text-slate-900 placeholder:text-slate-400"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  currentValue={title}
+                  onTranscript={(newText) => setTitle(newText)}
+                  mode="replace"
+                  tooltip="Nhấn để nói tên việc"
+                />
+              </div>
+            </div>
           </div>
 
           {/* 2. Đơn vị & Mức độ ưu tiên */}
@@ -1185,6 +1205,13 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 Mô tả chi tiết / Nội dung nhiệm vụ
               </label>
               <div className="flex items-center gap-1.5">
+                <VoiceInputButton
+                  currentValue={description}
+                  onTranscript={(newText) => setDescription(newText)}
+                  mode="append"
+                  tooltip="Đọc nội dung để thêm vào mô tả"
+                  buttonText="Nói mô tả"
+                />
                 <button
                   type="button"
                   onClick={handleGenerateDescription}

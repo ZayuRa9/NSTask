@@ -34,6 +34,7 @@ import { FormattingToolbar } from './FormattingToolbar';
 import { FormattedContentRenderer } from './FormattedContentRenderer';
 import { FloatingNoteToolbar } from './FloatingNoteToolbar';
 import { NOTE_TEMPLATES, NoteTemplate } from '../data/noteTemplates';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface NoteModalProps {
   isOpen: boolean;
@@ -514,34 +515,55 @@ export const NoteModal: React.FC<NoteModalProps> = ({
           )}
 
           {/* Title and Template Trigger Row */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Tiêu đề ghi chú..."
-              className="w-full text-lg sm:text-xl font-extrabold bg-transparent border-0 outline-hidden placeholder:text-slate-400 text-slate-900 focus:ring-0 px-0"
+              className="flex-1 text-lg sm:text-xl font-extrabold bg-transparent border-0 outline-hidden placeholder:text-slate-400 text-slate-900 focus:ring-0 px-0"
               autoFocus={!isEditing}
             />
-            <button
-              type="button"
-              onClick={() => setShowTemplateModal(true)}
-              className="inline-flex sm:hidden items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold shrink-0 border border-indigo-200"
-              title="Chọn mẫu"
-            >
-              <LayoutTemplate className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <VoiceInputButton
+                currentValue={title}
+                onTranscript={(text) => setTitle(text)}
+                mode="replace"
+                tooltip="Nói tiêu đề ghi chú"
+                buttonText="Nói tiêu đề"
+              />
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(true)}
+                className="inline-flex sm:hidden items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 text-xs font-bold shrink-0 border border-indigo-200"
+                title="Chọn mẫu"
+              >
+                <LayoutTemplate className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
-          {/* Formatting Toolbar */}
-          <FormattingToolbar
-            textareaRef={contentTextareaRef}
-            value={content}
-            onChange={setContent}
-            isPreviewing={isPreviewingContent}
-            onTogglePreview={setIsPreviewingContent}
-            className="bg-white/80 border-black/10 shadow-xs"
-          />
+          {/* Formatting Toolbar & Voice Content Dictation */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex-1 min-w-[240px]">
+              <FormattingToolbar
+                textareaRef={contentTextareaRef}
+                value={content}
+                onChange={setContent}
+                isPreviewing={isPreviewingContent}
+                onTogglePreview={setIsPreviewingContent}
+                className="bg-white/80 border-black/10 shadow-xs"
+              />
+            </div>
+            <VoiceInputButton
+              currentValue={content}
+              onTranscript={(text) => setContent(text)}
+              mode="append"
+              tooltip="Đọc nội dung để thêm vào ghi chú"
+              buttonText="Nói nội dung"
+              className="shadow-2xs"
+            />
+          </div>
 
           {/* Content Area with Floating Formatting Toolbar */}
           <div ref={editorContainerRef} className={`relative ${isFullScreen ? 'min-h-[460px] flex-1' : 'min-h-[140px]'}`}>
@@ -656,6 +678,12 @@ export const NoteModal: React.FC<NoteModalProps> = ({
                 }}
                 placeholder="+ Thêm mục checklist (nhấn Enter để thêm)..."
                 className="flex-1 px-3 py-1.5 rounded-xl bg-white/80 border border-slate-200 text-xs text-slate-800 focus:bg-white focus:outline-indigo-500"
+              />
+              <VoiceInputButton
+                currentValue={newChecklistText}
+                onTranscript={(text) => setNewChecklistText(text)}
+                mode="replace"
+                tooltip="Nói để điền nhanh mục checklist"
               />
               <button
                 type="button"
