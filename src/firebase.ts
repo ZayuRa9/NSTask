@@ -1,7 +1,63 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import rawFirebaseConfig from '../firebase-applet-config.json';
+
+/**
+ * Dynamically resolves the optimal authDomain for Firebase Authentication:
+ * 1. Explicit environment variable: VITE_FIREBASE_AUTH_DOMAIN
+ * 2. In browser environments:
+ *    - Dynamically evaluates window.location to support current host proxy (e.g. *.run.app)
+ *    - Automatically utilizes recognized authorized domains or localhost
+ * 3. Primary authorized project URLs:
+ *    - `${projectId}.firebaseapp.com`
+ *    - `${projectId}.web.app`
+ */
+export function resolveDynamicAuthDomain(): string {
+  try {
+    const envAuthDomain = (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN;
+    if (envAuthDomain && typeof envAuthDomain === 'string' && envAuthDomain.trim()) {
+      return envAuthDomain.trim();
+    }
+  } catch {}
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const host = window.location.host;
+
+    // Support URL param override for testing authorized domains
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paramDomain = urlParams.get('firebaseAuthDomain');
+      if (paramDomain) return paramDomain;
+    } catch {}
+
+    // Check if host-based auth domain is explicitly requested
+    try {
+      if ((import.meta as any).env?.VITE_USE_HOST_AUTH_DOMAIN === 'true' && host) {
+        return host;
+      }
+    } catch {}
+
+    // If current hostname is in authorizedAuthDomains list, use it
+    const authorizedList: string[] = (rawFirebaseConfig as any).authorizedAuthDomains || [];
+    if (authorizedList.includes(hostname)) {
+      return hostname === 'localhost' ? 'localhost' : hostname;
+    }
+  }
+
+  return (
+    rawFirebaseConfig.authDomain ||
+    `${rawFirebaseConfig.projectId}.firebaseapp.com` ||
+    `${rawFirebaseConfig.projectId}.web.app`
+  );
+}
+
+// Build dynamic configuration
+export const firebaseConfig = {
+  ...rawFirebaseConfig,
+  authDomain: resolveDynamicAuthDomain(),
+};
 
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

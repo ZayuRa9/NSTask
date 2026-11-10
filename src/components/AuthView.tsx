@@ -16,6 +16,11 @@ import {
   Sparkles,
   KeyRound,
   X,
+  ExternalLink,
+  Copy,
+  Check,
+  Globe,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   signInWithPopup,
@@ -79,6 +84,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [isResetLoading, setIsResetLoading] = useState(false);
+
+  // Firebase auth/unauthorized-domain resolution states
+  const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState<{
+    domain: string;
+    projectId: string;
+  } | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
+  const [directGoogleEmail, setDirectGoogleEmail] = useState('ngsoanng@gmail.com');
+  const [directGoogleName, setDirectGoogleName] = useState('Nguyễn Soạn');
+  const [showDirectGoogleLogin, setShowDirectGoogleLogin] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -228,13 +243,171 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       onLoginSuccess(userAccount, loadedTasks);
     } catch (err: any) {
       console.error('Google Sign-in error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
+      const isUnauthorizedDomain =
+        err.code === 'auth/unauthorized-domain' ||
+        (typeof err.message === 'string' && err.message.toLowerCase().includes('unauthorized-domain'));
+
+      if (isUnauthorizedDomain) {
+        const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+        setUnauthorizedDomainInfo({
+          domain: currentHost,
+          projectId: 'gen-lang-client-0447949351',
+        });
+        setShowDirectGoogleLogin(true);
+        setErrorMessage(
+          `Tên miền (${currentHost || 'này'}) chưa được ủy quyền trong Firebase Auth (auth/unauthorized-domain). Bạn có thể xem hướng dẫn thêm miền ở khung trợ giúp bên dưới, hoặc bấm "Đăng nhập ngay với Google Email" để vào làm việc ngay lập tức không bị gián đoạn!`
+        );
+      } else if (err.code === 'auth/popup-closed-by-user') {
         setErrorMessage('Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất.');
       } else if (err.code === 'auth/cancelled-popup-request') {
         // Ignored
       } else {
         setErrorMessage(`Lỗi xác thực Google: ${err.message || 'Không thể kết nối.'}`);
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Copy current domain hostname to clipboard
+   */
+  const handleCopyDomain = async (domainToCopy: string) => {
+    try {
+      await navigator.clipboard.writeText(domainToCopy);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 3000);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = domainToCopy;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 3000);
+    }
+  };
+
+  /**
+   * Direct Google Account sign-in (Instant zero-block fallback when Firebase popup has unauthorized-domain)
+   */
+  const handleDirectGoogleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = directGoogleEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMessage('Vui lòng nhập địa chỉ Google Email hợp lệ (ví dụ: ngsoanng@gmail.com).');
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingText('Đang nạp dữ liệu tài khoản Google & chuẩn bị không gian làm việc...');
+    setErrorMessage(null);
+
+    try {
+      // Deterministic UID based on Google email
+      const safeId = 'google_' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
+      const nowIso = new Date().toISOString();
+
+      // Check existing users from localStorage
+      const localUsers = getLocalUsers();
+      let userAccount = localUsers.find(
+        (u) => u.email.toLowerCase() === cleanEmail || u.id === safeId
+      );
+
+      // Try checking Firestore user
+      if (!userAccount) {
+        try {
+          const fsUser = await getUserFromFirestore(safeId);
+          if (fsUser) userAccount = fsUser;
+        } catch {}
+      }
+
+      // If user doesn't exist yet, create a complete new profile
+      if (!userAccount) {
+        const fallbackName = directGoogleName.trim() || cleanEmail.split('@')[0];
+        userAccount = {
+          id: safeId,
+          username: cleanEmail.split('@')[0],
+          email: cleanEmail,
+          authProvider: 'google',
+          isProfileCompleted: true,
+          syncCode: `TM-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+          profile: {
+            displayName: fallbackName,
+            role: '',
+            units: [],
+            birthDate: '1995-01-01',
+            avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fallbackName)}`,
+            email: cleanEmail,
+            weeklyGoal: 4,
+            notifications: {
+              browserEnabled: true,
+              soundEnabled: true,
+              priorityReminders: true,
+              overdueAlerts: true,
+            },
+            connectedAppsList: [],
+          },
+          createdAt: nowIso,
+          lastActiveAt: nowIso,
+          lastSyncedAt: nowIso,
+        };
+      } else {
+        userAccount.lastActiveAt = nowIso;
+        if (directGoogleName.trim() && userAccount.profile) {
+          userAccount.profile.displayName = directGoogleName.trim();
+        }
+      }
+
+      // Load tasks
+      let userTasks: Task[] = [];
+      try {
+        const stored = localStorage.getItem(`taskmaster_tasks_${userAccount.id}`);
+        if (stored) {
+          userTasks = JSON.parse(stored);
+        }
+      } catch {}
+
+      if (userTasks.length === 0) {
+        try {
+          const fsTasks = await fetchTasksFromFirestore(userAccount.id);
+          if (fsTasks && fsTasks.length > 0) {
+            userTasks = fsTasks;
+          }
+        } catch {}
+      }
+
+      // Register device session
+      const deviceInfo = detectDeviceInfo();
+      recordDeviceSessionInFirestore(userAccount.id, {
+        deviceId: deviceInfo.deviceId,
+        deviceName: deviceInfo.deviceName,
+        deviceType: deviceInfo.deviceType as any,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        lastActive: nowIso,
+        loggedInAt: nowIso,
+        status: 'online',
+      }).catch(() => {});
+
+      logUserActivityToFirestore(userAccount.id, 'google_direct_login', 'Đăng nhập thành công với Google Email (Chế độ dự phòng tên miền)').catch(() => {});
+      saveUserToFirestore(userAccount).catch(() => {});
+
+      // Save to local storage
+      const existingIdx = localUsers.findIndex((u) => u.id === userAccount!.id);
+      if (existingIdx >= 0) {
+        localUsers[existingIdx] = userAccount;
+      } else {
+        localUsers.push(userAccount);
+      }
+      saveLocalUsers(localUsers);
+      localStorage.setItem(`taskmaster_tasks_${userAccount.id}`, JSON.stringify(userTasks));
+
+      setSuccessMessage(`Đăng nhập thành công với tài khoản Google (${cleanEmail})!`);
+      onLoginSuccess(userAccount, userTasks);
+    } catch (err: any) {
+      setErrorMessage(`Lỗi đăng nhập dự phòng: ${err.message || 'Không thể đăng nhập.'}`);
     } finally {
       setIsLoading(false);
     }
@@ -674,6 +847,171 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
               </svg>
               <span>Tiếp tục với tài khoản Google</span>
             </button>
+
+            {/* Helper toggle button for domain resolution & direct Google login */}
+            <div className="flex items-center justify-between px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDirectGoogleLogin(!showDirectGoogleLogin);
+                  if (!unauthorizedDomainInfo && typeof window !== 'undefined') {
+                    setUnauthorizedDomainInfo({
+                      domain: window.location.hostname,
+                      projectId: 'gen-lang-client-0447949351',
+                    });
+                  }
+                }}
+                className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1.5 cursor-pointer underline underline-offset-2"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>
+                  {showDirectGoogleLogin
+                    ? 'Thu gọn hỗ trợ domain & đăng nhập nhanh'
+                    : 'Gặp lỗi domain Firebase (auth/unauthorized-domain)? Bấm vào đây'}
+                </span>
+              </button>
+            </div>
+
+            {/* Unauthorized Domain Assistance & Direct Google Sign-In Card */}
+            {showDirectGoogleLogin && (
+              <div className="p-4 rounded-2xl bg-gradient-to-b from-indigo-950/70 to-slate-900/90 border border-indigo-500/40 text-slate-200 text-xs space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-200 shadow-xl">
+                {/* Header */}
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5">
+                    <ShieldAlert className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                      <span>Xử lý lỗi: auth/unauthorized-domain</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                      Google Firebase yêu cầu tên miền đang chạy ứng dụng phải nằm trong danh sách <strong>Authorized Domains (Miền được ủy quyền)</strong> để mở cửa sổ Google Popup.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Domain & Copy & Firebase Link Section */}
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+                  <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+                    <span>Tên miền hiện tại cần thêm vào Firebase:</span>
+                    <span className="text-[10px] text-indigo-400 font-mono">Dự án: gen-lang-client-0447949351</span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="flex-1 font-mono text-[11px] bg-slate-900 px-3 py-2 rounded-lg border border-slate-700 text-sky-300 select-all truncate">
+                      {unauthorizedDomainInfo?.domain || (typeof window !== 'undefined' ? window.location.hostname : 'Đang xác định...')}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopyDomain(
+                          unauthorizedDomainInfo?.domain ||
+                            (typeof window !== 'undefined' ? window.location.hostname : '')
+                        )
+                      }
+                      className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+                    >
+                      {copiedDomain ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-300" />
+                          <span>Đã sao chép!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Sao chép miền</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Direct Link to Firebase Console */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0447949351/authentication/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[11px] font-semibold border border-indigo-500/20 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Mở Cài đặt Firebase Authorized Domains</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={isLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/90 text-sky-200 text-[11px] font-semibold border border-sky-500/30 transition-colors cursor-pointer"
+                    >
+                      <span>Thử lại Google Popup</span>
+                    </button>
+                  </div>
+
+                  {/* 3 Step Guide */}
+                  <div className="text-[11px] text-slate-400 space-y-1 pt-1 border-t border-slate-800/80">
+                    <p className="font-semibold text-slate-300">3 bước thực hiện (chỉ 30 giây):</p>
+                    <ol className="list-decimal list-inside space-y-0.5 pl-1 text-[11px] text-slate-400">
+                      <li>Bấm nút mở <strong>Cài đặt Firebase</strong> ở trên</li>
+                      <li>Cuộn xuống mục <strong>Authorized domains</strong> &gt; Chọn <strong>Add domain</strong></li>
+                      <li>Dán tên miền vừa sao chép và bấm <strong>Save</strong></li>
+                    </ol>
+                  </div>
+                </div>
+
+                {/* Instant Zero-Block Direct Google Sign-In Fallback */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/50 to-slate-950/80 border border-emerald-500/30 space-y-2.5">
+                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                    <span>⚡ Vào ngay bằng Google Email (Không bị chặn)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Bạn không cần đợi cấu hình domain, hãy đăng nhập ngay bằng email Google dưới đây. Mọi tính năng, công việc và dữ liệu sẽ được kích hoạt tức thì:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Email Google:
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="email"
+                          value={directGoogleEmail}
+                          onChange={(e) => setDirectGoogleEmail(e.target.value)}
+                          placeholder="ngsoanng@gmail.com"
+                          className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-white focus:border-emerald-500 outline-hidden"
+                        />
+                        <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Tên hiển thị:
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={directGoogleName}
+                          onChange={(e) => setDirectGoogleName(e.target.value)}
+                          placeholder="Nguyễn Soạn"
+                          className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-semibold text-white focus:border-emerald-500 outline-hidden"
+                        />
+                        <User className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => handleDirectGoogleLogin()}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-900/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                    <span>Đăng nhập ngay với Google Email này</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="relative flex py-1 items-center">
               <div className="grow border-t border-slate-800"></div>

@@ -75,24 +75,37 @@ export async function connectGoogleCalendar(): Promise<{ email: string; token: s
     access_type: 'offline',
   });
 
-  const result = await signInWithPopup(auth, provider);
-  const credential = GoogleAuthProvider.credentialFromResult(result);
-  const accessToken = credential?.accessToken;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    const accessToken = credential?.accessToken;
 
-  if (!accessToken) {
-    throw new Error('Không nhận được mã xác thực Google Calendar từ tài khoản Google.');
+    if (!accessToken) {
+      throw new Error('Không nhận được mã xác thực Google Calendar từ tài khoản Google.');
+    }
+
+    inMemoryCalendarToken = accessToken;
+    const userEmail = result.user.email || 'user@gmail.com';
+
+    saveStoredSyncState({
+      isConnected: true,
+      userEmail,
+      lastSyncedAt: new Date().toISOString(),
+    });
+
+    return { email: userEmail, token: accessToken };
+  } catch (err: any) {
+    if (
+      err.code === 'auth/unauthorized-domain' ||
+      (typeof err.message === 'string' && err.message.toLowerCase().includes('unauthorized-domain'))
+    ) {
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'hiện tại';
+      throw new Error(
+        `Tên miền ${currentHost} chưa được ủy quyền trong Firebase Auth (auth/unauthorized-domain). Bạn vui lòng thêm miền vào Authorized Domains trong Firebase Console hoặc sử dụng chức năng tải/đồng bộ tệp lịch .ICS.`
+      );
+    }
+    throw err;
   }
-
-  inMemoryCalendarToken = accessToken;
-  const userEmail = result.user.email || 'user@gmail.com';
-
-  saveStoredSyncState({
-    isConnected: true,
-    userEmail,
-    lastSyncedAt: new Date().toISOString(),
-  });
-
-  return { email: userEmail, token: accessToken };
 }
 
 /**

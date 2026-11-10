@@ -331,14 +331,11 @@ export const ActiveTaskList: React.FC<ActiveTaskListProps> = ({
 
         {/* BỘ LỌC NHANH KHỐI LƯỢNG CÔNG VIỆC THEO THỜI HẠN (Tuần này / Tháng này / Sắp tới) */}
         <div className="bg-slate-50/90 p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 space-y-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+          <div className="flex items-center gap-1.5 text-xs">
             <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-indigo-600" />
               <span>Khối lượng công việc theo thời hạn:</span>
             </span>
-            <div className="text-[11px] text-slate-500 font-medium">
-              Bấm chọn để lọc ngay công việc theo từng mốc thời gian
-            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

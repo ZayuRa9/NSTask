@@ -1638,7 +1638,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Đơn Vị (Gắn với danh sách đơn vị đã tạo): <span className="text-rose-500">*</span>
+                  Đơn Vị: <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />

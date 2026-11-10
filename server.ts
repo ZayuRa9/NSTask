@@ -23,6 +23,7 @@ import {
   Packer as DocxPacker,
   convertMillimetersToTwip,
 } from 'docx';
+import { generateDynamicSubtasks, normalizeSubtaskPhase } from './src/utils/aiTaskGenerator.js';
 
 dotenv.config();
 
@@ -67,6 +68,40 @@ const HOST = getAppHost();
 const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(express.json({ limit: '20mb' }));
+
+/**
+ * Reverse Proxy for Firebase Auth Handler (/__/auth/*)
+ * Forwards auth handler requests to Firebase Authentication service
+ * to enable seamless dynamic authDomain resolution on custom/applet domains.
+ */
+app.all('/__/auth/*', async (req: Request, res: Response) => {
+  try {
+    const targetUrl = `https://gen-lang-client-0447949351.firebaseapp.com${req.originalUrl}`;
+    const headers: Record<string, string> = {};
+    for (const [key, val] of Object.entries(req.headers)) {
+      if (key !== 'host' && typeof val === 'string') {
+        headers[key] = val;
+      }
+    }
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+      body: ['POST', 'PUT', 'PATCH'].includes(req.method) ? JSON.stringify(req.body) : undefined,
+    });
+
+    response.headers.forEach((value, name) => {
+      if (name.toLowerCase() !== 'x-frame-options') {
+        res.setHeader(name, value);
+      }
+    });
+    res.status(response.status);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.send(buffer);
+  } catch (err) {
+    console.error('[Firebase Auth Proxy Error]', err);
+    res.status(502).send('Firebase Auth proxy unavailable');
+  }
+});
 
 // Initialize GoogleGenAI SDK with server-side API Key
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -1139,7 +1174,7 @@ Trả về định dạng JSON thuần túy:
  */
 app.post('/api/ai/breakdown-task', async (req: Request, res: Response) => {
   try {
-    const { title, description, unit, granularity } = req.body;
+    const { title, description, unit, granularity, targetPhase } = req.body;
     if (!title && !description) {
       return res.status(400).json({ error: 'Tiêu đề hoặc mô tả nhiệm vụ là bắt buộc' });
     }
@@ -1150,44 +1185,48 @@ app.post('/api/ai/breakdown-task', async (req: Request, res: Response) => {
     const mode = (granularity || 'phased') as 'phased' | 'standard' | 'detailed' | 'deliverables';
 
     if (!ai) {
-      const fallbackResult = generateSmartDomainSubtasks(taskTitle, taskUnit, mode);
+      const fallbackResult = generateDynamicSubtasks(taskTitle, taskUnit, mode);
       return res.json(fallbackResult);
     }
 
-    const countPrompt =
-      mode === 'detailed'
-        ? '7 đến 9 việc con chi tiết từng bước hành động của cá nhân tôi'
-        : mode === 'phased'
-        ? '5 đến 7 việc con chia theo 3 giai đoạn: [Chuẩn bị], [Thực hiện], [Hoàn tất & Nghiệm thu]'
-        : '5 đến 6 việc con hành động thiết thực của tôi';
+    const targetPhaseConstraint = targetPhase
+      ? `LƯU Ý ĐẶC BIỆT: Người dùng chỉ muốn phân rã lại riêng cho giai đoạn "${targetPhase}". Hãy chỉ trả về các nhiệm vụ con thuộc đúng giai đoạn này.`
+      : `Phân chia toàn diện kế hoạch thành đúng 3 giai đoạn:
+1. "Giai đoạn 1: Chuẩn bị" (phaseId: "preparation")
+2. "Giai đoạn 2: Triển khai" (phaseId: "execution")
+3. "Giai đoạn 3: Tổng kết – Hoàn thành" (phaseId: "conclusion")`;
 
-    const prompt = `Bạn là Chuyên gia Tham mưu Phân rã Công việc WBS Cá nhân Cấp cao (Personal Action WBS Copilot).
-BỐI CẢNH ĐẶC BIỆT QUAN TRỌNG:
-Người dùng đang lập kế hoạch hành động CHO CHÍNH BẢN THÂN MÌNH (những việc TÔI trực tiếp thực hiện/tham mưu cho mảng việc thuộc đơn vị: "${taskUnit}").
-LƯU Ý CỐT LÕI: "${taskUnit}" CHỈ LÀ PHÂN LOẠI MẢNG VIỆC tôi làm cho đơn vị đó, TUYỆT ĐỐI KHÔNG PHẢI đơn vị đó đại diện đứng ra làm.
-CẤM TUYỆT ĐỐI viết theo kiểu tập thể chung chung ("Đơn vị X tổ chức...", "Phân công đoàn viên trong đơn vị...").
+    const prompt = `Bạn là Chuyên gia Tham mưu Phân rã Kế hoạch Nhiệm vụ Cấp cao (Action Plan & WBS Expert).
+MỤC TIÊU:
+Phân tích nhiệm vụ lớn thành kế hoạch thực hiện rõ ràng, dễ hiểu, thực tế và có thể áp dụng ngay.
 
-Nhiệm vụ cần phân rã:
+THÔNG TIN NHIỆM VỤ:
 - Tên nhiệm vụ: "${taskTitle}"
-- Mảng việc làm cho đơn vị: "${taskUnit}"
-- Mô tả / Ý định của tôi: "${taskDesc || 'Phân tích sâu từ tên nhiệm vụ trên.'}"
-- Mức độ chia nhỏ: "${mode}" (${countPrompt})
+- Đơn vị / Mảng việc: "${taskUnit}"
+- Mô tả / Ý định chi tiết: "${taskDesc || 'Phân tích sâu theo chuyên môn từ tên nhiệm vụ trên.'}"
 
-YÊU CẦU ĐẶC BIỆT: AI TẠO TASKS PHẢI THAY ĐỔI LINH HOẠT VÀ ĐẶC THÙ HÓA 100% DỰA TRÊN TÊN NHIỆM VỤ "${taskTitle}".
-1. TẤT CẢ CÁC VIỆC CON (title) PHẢI LÀ THAO TÁC NGHIỆP VỤ CỤ THỂ, TRỰC TIẾP, ĐÚNG CHUYÊN MÔN CỦA "${taskTitle}".
-   - TUYỆT ĐỐI CẤM các mẫu câu rập khuôn máy móc vô hồn như: "Tôi rà soát mục tiêu", "Tôi chuẩn bị tài liệu", "Tôi triển khai nội dung cốt lõi", "Tôi tự kiểm tra".
-   - BẮT BUỘC phải nêu rõ ĐÍCH DANH đối tượng, vật tư, công cụ, hoặc văn bản của "${taskTitle}".
-   Ví dụ thực tế:
-   + Nếu "${taskTitle}" là "Mua sắm máy in văn phòng": Phải là "Tôi khảo sát thông số kỹ thuật và nhu cầu in ấn văn phòng", "Tôi liên hệ lấy 3 bảng báo giá máy in từ nhà cung cấp", "Tôi lập tờ trình phê duyệt dự toán mua máy in", "Tôi kiểm tra tem niêm phong và nghiệm thu bàn giao máy in tại phòng làm việc", "Tôi hoàn thiện chứng từ thanh toán và nhập sổ tài sản".
-   + Nếu "${taskTitle}" là "Giải bóng đá thanh niên": Phải là "Tôi ban hành điều lệ giải bóng đá và thể thức thi đấu", "Tôi khảo sát thuê sân cỏ nhân tạo và thuê tổ trọng tài", "Tôi họp bốc thăm chia bảng và chốt danh sách cầu thủ", "Tôi chuẩn bị cúp, cờ lưu niệm, nước uống và túi y tế sơ cứu", "Tôi điều phối các trận đấu và tổ chức lễ bế mạc trao huy chương".
-   + Nếu "${taskTitle}" là "Cài đặt máy chủ Ubuntu": Phải là "Tôi kiểm tra cấu hình phần cứng VPS/Server", "Tôi cài đặt hệ điều hành Ubuntu Server và thiết lập SSH key", "Tôi cấu hình tường lửa UFW và tối ưu bảo mật", "Tôi cài đặt web server Nginx và hệ quản trị CSDL", "Tôi kiểm thử kết nối và sao lưu file cấu hình".
-2. TẤT CẢ VIỆC CON ĐỀU BẮT ĐẦU BẰNG HÀNH ĐỘNG CỦA "Tôi" (Tôi khảo sát..., Tôi soạn thảo..., Tôi trực tiếp liên hệ..., Tôi nghiệm thu...).
-3. ĐOẠN PHÂN TÍCH THAM MƯU (analysis):
-   - 2-3 câu tham mưu chiến lược sắc bén cho TÔI về đặc thù riêng của "${taskTitle}", chỉ rõ điểm nghẽn rủi ro nhất của việc này và giải pháp tháo gỡ thực tế.
-4. TÀI LIỆU/CÔNG CỤ GỢI Ý (resource):
-   - Phải là biểu mẫu, checklist hoặc công cụ tra cứu THỰC TẾ tương thích chính xác với "${taskTitle}".
+${targetPhaseConstraint}
 
-Trả về JSON thuần túy có "analysis" và "subtasks".`;
+CẤU TRÚC PHÂN RÃ BẮT BUỘC CHO MỖI NHIỆM VỤ CON:
+Mỗi nhiệm vụ con (subtask) PHẢI có đầy đủ 5 thành tố sau:
+1. title: Tên nhiệm vụ con ngắn gọn, rõ hành động cụ thể, bắt đầu bằng hành động trực tiếp của người thực hiện (VD: "Thu thập 3 bảng báo giá", "Soạn thảo dự thảo quy chế", "Lập danh sách 50 đại biểu").
+2. phase: Tên giai đoạn tương ứng (Chính xác 1 trong 3: "Giai đoạn 1: Chuẩn bị" | "Giai đoạn 2: Triển khai" | "Giai đoạn 3: Tổng kết – Hoàn thành").
+3. phaseId: "preparation" | "execution" | "conclusion".
+4. completionCriteria: Tiêu chuẩn hoàn thành - Điều kiện cụ thể, định lượng hoặc tiêu chí rõ ràng để xác định nhiệm vụ đã đạt yêu cầu (VD: "Có đủ 3 bảng báo giá hợp lệ có mộc tròn", "Dự thảo được rà soát đủ 5 chương không lỗi chính tả").
+5. implementationSteps: Chi tiết thực hiện - Hướng dẫn 2 đến 4 bước hành động cụ thể, dễ hiểu và thực tế, chỉ rõ cách làm từng bước.
+6. deliverable: Sản phẩm đầu ra - Kết quả cụ thể cần tạo ra sau khi hoàn thành (VD: "Bảng tổng hợp so sánh giá", "Dự thảo Word (.docx)", "Biên bản nghiệm thu", "Báo cáo tổng kết").
+7. relatedDocuments: Tài liệu liên quan - Tên văn bản, quy chế hoặc tài liệu cần chuẩn bị / tham khảo nếu có (VD: "Mẫu báo giá chuẩn", "Quy chế chi tiêu nội bộ", "Biên bản họp").
+8. resource: Gợi ý tìm kiếm tài liệu mẫu (object có title, url tìm kiếm Google, description).
+
+QUY TẮC CẢI THIỆN AI:
+- Phân tích đúng nội dung nhiệm vụ người dùng nhập.
+- Tạo nhiệm vụ phù hợp với từng loại công việc cụ thể.
+- Không tạo nhiệm vụ trùng lặp hoặc không cần thiết.
+- Đánh giá độ phức tạp:
+  + Nếu công việc đơn giản (ít khâu): phân rã ngắn gọn (1 đến 2 việc con mỗi giai đoạn, tổng 4-6 việc).
+  + Nếu công việc phức tạp (quy mô lớn, nhiều bên): phân rã chi tiết (2 đến 3 việc con mỗi giai đoạn, tổng 6-9 việc).
+- Không tự ý đặt thời hạn (deadline) hoặc thông tin không có căn cứ.
+- Trả về JSON đúng cấu trúc bên dưới.`;
 
     const response = await callGeminiWithRetry(() =>
       ai.models.generateContent({
@@ -1200,7 +1239,7 @@ Trả về JSON thuần túy có "analysis" và "subtasks".`;
             properties: {
               analysis: {
                 type: Type.STRING,
-                description: 'Lời tham mưu chiến lược sắc bén cho cá nhân người dùng về cách làm chủ tiến độ và tháo gỡ điểm nghẽn.',
+                description: 'Lời tham mưu chiến lược ngắn gọn, sắc bén về cách làm chủ tiến độ qua 3 giai đoạn.',
               },
               subtasks: {
                 type: Type.ARRAY,
@@ -1209,11 +1248,32 @@ Trả về JSON thuần túy có "analysis" và "subtasks".`;
                   properties: {
                     title: {
                       type: Type.STRING,
-                      description: 'Tên việc con là hành động cụ thể của TÔI, ngôn từ gần gũi, dễ hiểu.',
+                      description: 'Tên nhiệm vụ con ngắn gọn, rõ hành động cụ thể.',
                     },
                     phase: {
                       type: Type.STRING,
-                      description: 'Giai đoạn (Chuẩn bị, Thực hiện, Hoàn thành)',
+                      description: 'Giai đoạn 1: Chuẩn bị | Giai đoạn 2: Triển khai | Giai đoạn 3: Tổng kết – Hoàn thành',
+                    },
+                    phaseId: {
+                      type: Type.STRING,
+                      description: 'preparation | execution | conclusion',
+                    },
+                    completionCriteria: {
+                      type: Type.STRING,
+                      description: 'Tiêu chuẩn hoàn thành: Điều kiện cụ thể để xác định nhiệm vụ đạt yêu cầu.',
+                    },
+                    implementationSteps: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: 'Chi tiết thực hiện: 2 đến 4 bước hành động cụ thể, dễ hiểu và thực tế.',
+                    },
+                    deliverable: {
+                      type: Type.STRING,
+                      description: 'Sản phẩm đầu ra: Kết quả cụ thể cần tạo ra.',
+                    },
+                    relatedDocuments: {
+                      type: Type.STRING,
+                      description: 'Tài liệu liên quan: Văn bản, mẫu cần chuẩn bị hoặc tham khảo.',
                     },
                     completed: { type: Type.BOOLEAN },
                     resource: {
@@ -1226,7 +1286,7 @@ Trả về JSON thuần túy có "analysis" và "subtasks".`;
                       required: ['title', 'url'],
                     },
                   },
-                  required: ['title', 'completed'],
+                  required: ['title', 'phase', 'completionCriteria', 'deliverable'],
                 },
               },
             },
@@ -1238,17 +1298,31 @@ Trả về JSON thuần túy có "analysis" và "subtasks".`;
 
     const parsed = JSON.parse(response.text || '{}');
     if (!parsed.subtasks || !Array.isArray(parsed.subtasks) || parsed.subtasks.length === 0) {
-      const fallbackResult = generateSmartDomainSubtasks(taskTitle, taskUnit, mode);
+      const fallbackResult = generateDynamicSubtasks(taskTitle, taskUnit, mode);
       return res.json(fallbackResult);
     }
 
-    return res.json(parsed);
+    // Normalize phase and phaseId for every subtask
+    const normalizedSubtasks = parsed.subtasks.map((st: any) => {
+      const phaseInfo = normalizeSubtaskPhase(st.phase, st.phaseId);
+      return {
+        ...st,
+        phase: phaseInfo.label,
+        phaseId: phaseInfo.id,
+        completed: Boolean(st.completed),
+      };
+    });
+
+    return res.json({
+      analysis: parsed.analysis || `Kế hoạch hành động 3 giai đoạn cho "${taskTitle}".`,
+      subtasks: normalizedSubtasks,
+    });
   } catch (error: any) {
     console.warn('[AI Service] Notice in breakdown-task, serving fallback:', error?.message);
     const t = (req.body?.title || 'Nhiệm vụ trọng tâm').trim();
     const u = (req.body?.unit || 'Đơn vị thực hiện').trim();
     const mode = (req.body?.granularity || 'phased') as 'phased' | 'standard' | 'detailed' | 'deliverables';
-    const fallbackResult = generateSmartDomainSubtasks(t, u, mode);
+    const fallbackResult = generateDynamicSubtasks(t, u, mode);
     return res.json(fallbackResult);
   }
 });

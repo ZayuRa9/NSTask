@@ -38,3 +38,21 @@ test('generateDynamicSubtasks produces procurement-tailored subtasks with exact 
   assert.strictEqual(result.domain, 'procurement');
   assert.ok(result.subtasks.some((s) => s.title.includes('báo giá') || s.title.includes('mua sắm') || s.title.includes('máy in')));
 });
+
+test('generateDynamicSubtasks produces 3 canonical phases with complete subtask fields', () => {
+  const result = generateDynamicSubtasks('Tổ chức Hội nghị kiểm điểm cuối năm', 'Ban Thanh Niên');
+  const phases = new Set(result.subtasks.map((s) => s.phase));
+  assert.ok(phases.has('Giai đoạn 1: Chuẩn bị'));
+  assert.ok(phases.has('Giai đoạn 2: Triển khai'));
+  assert.ok(phases.has('Giai đoạn 3: Tổng kết – Hoàn thành'));
+
+  // Ensure every subtask has completionCriteria, implementationSteps, deliverable, and relatedDocuments
+  for (const st of result.subtasks) {
+    assert.ok(st.title && st.title.length > 5, 'Title should be meaningful');
+    assert.ok(st.completionCriteria && st.completionCriteria.length > 5, 'Must have completionCriteria');
+    assert.ok(Array.isArray(st.implementationSteps) && st.implementationSteps.length > 0, 'Must have implementationSteps');
+    assert.ok(st.deliverable && st.deliverable.length > 3, 'Must have deliverable');
+    assert.ok(st.relatedDocuments && st.relatedDocuments.length > 3, 'Must have relatedDocuments');
+    assert.ok(['preparation', 'execution', 'conclusion'].includes(st.phaseId), 'phaseId must be valid');
+  }
+});

@@ -30,7 +30,7 @@ import {
   FolderUp,
   Upload
 } from 'lucide-react';
-import { Task, Subtask, TaskAttachment, TaskLink, TaskPriority, UserProfile, TaskAssigner } from '../types/task';
+import { Task, Subtask, TaskAttachment, TaskLink, TaskPriority, UserProfile, TaskAssigner, TaskPhaseId } from '../types/task';
 import {
   calculateProgress,
   generateGoogleCalendarUrl,
@@ -38,13 +38,14 @@ import {
   toDatetimeLocal,
   safeToIsoString
 } from '../utils/taskCalculations';
-import { generateDynamicSubtasks } from '../utils/aiTaskGenerator';
+import { generateDynamicSubtasks, normalizeSubtaskPhase } from '../utils/aiTaskGenerator';
 import { BirthDateInput } from './BirthDateInput';
 import { downloadExcelTaskTemplate, parseExcelTasks } from '../utils/excelTemplate';
 import { parseDocumentTasks } from '../utils/documentTaskParser';
 import { FormattingToolbar } from './FormattingToolbar';
 import { FormattedContentRenderer } from './FormattedContentRenderer';
 import { VoiceInputButton } from './VoiceInputButton';
+import { PhasedSubtaskList } from './PhasedSubtaskList';
 
 interface TaskFormModalProps {
   isOpen: boolean;
@@ -113,20 +114,46 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   );
 
   // Subtasks
-  const [subtasks, setSubtasks] = useState<Subtask[]>(
-    initialTask?.subtasks || [
-      { id: 'sub-1', title: 'Khảo sát và chuẩn bị các thông tin cần thiết', phase: 'Chuẩn bị', completed: false },
-      { id: 'sub-2', title: 'Triển khai thực hiện các phần việc trọng tâm', phase: 'Thực hiện', completed: false },
-    ]
-  );
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-
-  // Editing Subtask Inline State
-  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
-  const [editSubtaskTitle, setEditSubtaskTitle] = useState('');
-  const [editSubtaskPhase, setEditSubtaskPhase] = useState('');
-  const [editSubtaskDocTitle, setEditSubtaskDocTitle] = useState('');
-  const [editSubtaskDocUrl, setEditSubtaskDocUrl] = useState('');
+  const [subtasks, setSubtasks] = useState<Subtask[]>(() => {
+    if (initialTask?.subtasks && initialTask.subtasks.length > 0) {
+      return initialTask.subtasks.map((st) => ({
+        ...st,
+        phaseId: st.phaseId || (st.phase ? normalizeSubtaskPhase(st.phase).id : 'preparation'),
+      }));
+    }
+    return [
+      {
+        id: 'sub-prep-1',
+        title: 'Khảo sát thông tin và chuẩn bị các điều kiện cần thiết',
+        phase: 'Chuẩn bị',
+        phaseId: 'preparation',
+        completed: false,
+        completionCriteria: 'Có đầy đủ số liệu, tài liệu và phương án trước khi triển khai',
+        implementationSteps: ['Thu thập tài liệu và thông tin liên quan', 'Lập danh mục việc cần làm và phân công rõ ràng'],
+        deliverable: 'Kế hoạch triển khai và bộ tài liệu tổng hợp',
+      },
+      {
+        id: 'sub-exec-1',
+        title: 'Triển khai thực hiện các nội dung công việc trọng tâm',
+        phase: 'Triển khai',
+        phaseId: 'execution',
+        completed: false,
+        completionCriteria: 'Hoàn thành đúng tiến độ và tiêu chuẩn chất lượng',
+        implementationSteps: ['Thực hiện theo các bước đã đề ra', 'Kiểm tra chéo kết quả từng phần việc'],
+        deliverable: 'Sản phẩm hoặc kết quả công việc hoàn tất',
+      },
+      {
+        id: 'sub-conc-1',
+        title: 'Kiểm tra, nghiệm thu và lập báo cáo tổng kết',
+        phase: 'Tổng kết – Hoàn thành',
+        phaseId: 'conclusion',
+        completed: false,
+        completionCriteria: 'Được rà soát đầy đủ và bàn giao kết quả theo yêu cầu',
+        implementationSteps: ['Rà soát lần cuối toàn bộ nội dung', 'Lưu trữ tài liệu và lập báo cáo kết quả'],
+        deliverable: 'Báo cáo tổng kết và hồ sơ lưu trữ hoàn chỉnh',
+      },
+    ];
+  });
 
   // Attachments & Links
   const [attachments, setAttachments] = useState<TaskAttachment[]>(initialTask?.attachments || []);
@@ -223,7 +250,6 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
         );
       }
       setAiError(null);
-      setEditingSubtaskId(null);
       setRefinedTaskPreview(null);
       setIsEditingAiAnalysis(false);
       setFileAnalysisNotice(null);
@@ -324,7 +350,26 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   };
 
   // AI: Phân rã nhiệm vụ lớn (WBS)
-  const handleBreakdownTask = async (customGranularity?: 'phased' | 'standard' | 'detailed' | 'deliverables') => {
+  const handleBreakdownTask = async (
+    rawOptions?:
+      | {
+          granularity?: 'phased' | 'standard' | 'detailed' | 'deliverables';
+          targetPhase?: TaskPhaseId;
+          keepCompletedOrCustom?: boolean;
+        }
+      | 'phased'
+      | 'standard'
+      | 'detailed'
+      | 'deliverables'
+  ) => {
+    const opts =
+      typeof rawOptions === 'string'
+        ? { granularity: rawOptions, keepCompletedOrCustom: breakdownAppend }
+        : rawOptions || {};
+    const chosenGranularity = opts.granularity || breakdownMode || 'phased';
+    const targetPhase = opts.targetPhase;
+    const keepCustom = opts.keepCompletedOrCustom ?? breakdownAppend;
+
     if (!title.trim() && !description.trim()) {
       setAiError('Vui lòng nhập tên nhiệm vụ hoặc dán nội dung mô tả để AI nghiên cứu và phân rã.');
       return;
@@ -332,7 +377,6 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
     setAiError(null);
     setBreakdownSuccessMsg(null);
     setIsGeneratingSubtasks(true);
-    const chosenGranularity = customGranularity || breakdownMode;
 
     try {
       const res = await fetch('/api/ai/breakdown-task', {
@@ -343,6 +387,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
           description: description.trim(),
           unit,
           granularity: chosenGranularity,
+          targetPhase,
         }),
       });
 
@@ -359,7 +404,13 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
           id: `ai-wbs-${Date.now()}-${i}`,
           title: st.title,
           phase: st.phase || undefined,
+          phaseId: st.phaseId || (st.phase ? normalizeSubtaskPhase(st.phase).id : undefined),
           completed: Boolean(st.completed),
+          completionCriteria: st.completionCriteria || undefined,
+          implementationSteps: Array.isArray(st.implementationSteps) ? st.implementationSteps : undefined,
+          deliverable: st.deliverable || undefined,
+          relatedDocuments: Array.isArray(st.relatedDocuments) ? st.relatedDocuments : undefined,
+          notes: st.notes || undefined,
           resource: st.resource
             ? {
                 title: st.resource.title,
@@ -369,13 +420,24 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             : undefined,
         }));
 
-        if (breakdownAppend) {
-          setSubtasks((prev) => [...prev, ...mappedSubtasks]);
-          setBreakdownSuccessMsg(`Đã bổ sung ${mappedSubtasks.length} đầu việc con do AI gợi ý (Bạn có thể tự do chỉnh sửa)!`);
-        } else {
-          setSubtasks(mappedSubtasks);
-          setBreakdownSuccessMsg(`Đã phân rã ${mappedSubtasks.length} đầu việc con rõ ràng (Bạn có thể tự do chỉnh sửa)!`);
-        }
+        setSubtasks((prev) => {
+          if (targetPhase) {
+            const keptFromOtherPhases = prev.filter(
+              (s) => (s.phaseId || normalizeSubtaskPhase(s.phase || '').id) !== targetPhase
+            );
+            const keptInTargetPhase = keepCustom
+              ? prev.filter((s) => (s.phaseId || normalizeSubtaskPhase(s.phase || '').id) === targetPhase && s.completed)
+              : [];
+            return [...keptFromOtherPhases, ...keptInTargetPhase, ...mappedSubtasks];
+          }
+          if (keepCustom) {
+            const completedOld = prev.filter((s) => s.completed);
+            return [...completedOld, ...mappedSubtasks];
+          }
+          return mappedSubtasks;
+        });
+
+        setBreakdownSuccessMsg(`AI đã phân tích và lập kế hoạch ${mappedSubtasks.length} nhiệm vụ thành công!`);
         setShowBreakdownOptions(false);
       } else {
         throw new Error('Danh sách phân rã rỗng');
@@ -388,89 +450,46 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
       setAiAnalysis(dynamicResult.analysis);
       setCustomAiAnalysisInput(dynamicResult.analysis);
 
-      const fallbackList: Subtask[] = dynamicResult.subtasks.map((st, i) => ({
+      let fallbackList: Subtask[] = dynamicResult.subtasks.map((st, i) => ({
         id: `fb-wbs-${Date.now()}-${i}`,
         title: st.title,
         phase: st.phase,
+        phaseId: st.phaseId,
         completed: false,
-        resource: st.resource
-          ? {
-              title: st.resource.title,
-              url: st.resource.url,
-              description: st.resource.description,
-            }
-          : undefined,
+        completionCriteria: st.completionCriteria,
+        implementationSteps: st.implementationSteps,
+        deliverable: st.deliverable,
+        relatedDocuments: st.relatedDocuments,
+        resource: st.resource,
       }));
 
-      if (breakdownAppend) {
-        setSubtasks((prev) => [...prev, ...fallbackList]);
-      } else {
-        setSubtasks(fallbackList);
+      if (targetPhase) {
+        fallbackList = fallbackList.filter((s) => s.phaseId === targetPhase);
       }
-      setBreakdownSuccessMsg(`AI đã phân tích tên nhiệm vụ "${t}" và tạo ${fallbackList.length} việc con phù hợp!`);
+
+      setSubtasks((prev) => {
+        if (targetPhase) {
+          const keptFromOtherPhases = prev.filter(
+            (s) => (s.phaseId || normalizeSubtaskPhase(s.phase || '').id) !== targetPhase
+          );
+          const keptInTargetPhase = keepCustom
+            ? prev.filter((s) => (s.phaseId || normalizeSubtaskPhase(s.phase || '').id) === targetPhase && s.completed)
+            : [];
+          return [...keptFromOtherPhases, ...keptInTargetPhase, ...fallbackList];
+        }
+        if (keepCustom) {
+          const completedOld = prev.filter((s) => s.completed);
+          return [...completedOld, ...fallbackList];
+        }
+        return fallbackList;
+      });
+
+      setBreakdownSuccessMsg(`AI đã phân tích nhiệm vụ và tạo ${fallbackList.length} việc con chuẩn 3 giai đoạn!`);
       setShowBreakdownOptions(false);
     } finally {
       setIsGeneratingSubtasks(false);
       setTimeout(() => setBreakdownSuccessMsg(null), 4000);
     }
-  };
-
-  // Toggle subtask checkbox
-  const handleToggleSubtask = (id: string) => {
-    setSubtasks((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, completed: !s.completed } : s))
-    );
-  };
-
-  // Edit subtask inline
-  const handleStartEditSubtask = (s: Subtask) => {
-    setEditingSubtaskId(s.id);
-    setEditSubtaskTitle(s.title);
-    setEditSubtaskPhase(s.phase || 'Thực hiện');
-    setEditSubtaskDocTitle(s.resource?.title || '');
-    setEditSubtaskDocUrl(s.resource?.url || '');
-  };
-
-  const handleSaveEditSubtask = () => {
-    if (!editingSubtaskId || !editSubtaskTitle.trim()) return;
-
-    setSubtasks((prev) =>
-      prev.map((s) => {
-        if (s.id !== editingSubtaskId) return s;
-        return {
-          ...s,
-          title: editSubtaskTitle.trim(),
-          phase: editSubtaskPhase.trim() || undefined,
-          resource: editSubtaskDocTitle.trim()
-            ? {
-                title: editSubtaskDocTitle.trim(),
-                url: editSubtaskDocUrl.trim() || `https://www.google.com/search?q=${encodeURIComponent(editSubtaskDocTitle.trim())}`,
-                description: s.resource?.description,
-              }
-            : undefined,
-        };
-      })
-    );
-
-    setEditingSubtaskId(null);
-  };
-
-  const handleCancelEditSubtask = () => {
-    setEditingSubtaskId(null);
-  };
-
-  // Add manual subtask
-  const handleAddSubtask = () => {
-    if (!newSubtaskTitle.trim()) return;
-    setSubtasks((prev) => [
-      ...prev,
-      { id: `sub-${Date.now()}`, title: newSubtaskTitle.trim(), phase: 'Thực hiện', completed: false },
-    ]);
-    setNewSubtaskTitle('');
-  };
-
-  const handleRemoveSubtask = (id: string) => {
-    setSubtasks((prev) => prev.filter((s) => s.id !== id));
   };
 
   // Save AI Analysis edits
@@ -788,9 +807,6 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 <span className="font-bold text-xs sm:text-sm text-emerald-950 block">
                   Tải Lên Tệp Tin Phân Tích Nhiệm Vụ (Word / Excel / PDF)
                 </span>
-                <p className="text-[11px] text-emerald-800/80">
-                  Tải lên tệp để AI phân tích và tự động điền nhiệm vụ, hoặc tải tệp Excel mẫu chuẩn 12 cột.
-                </p>
               </div>
             </div>
 
@@ -963,7 +979,6 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                   <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                   Làm cho đơn vị / Mảng việc:
                 </span>
-                <span className="text-[10px] font-normal normal-case text-slate-500">(Phân loại tôi làm cho đơn vị này)</span>
               </label>
               {!isAddingNewUnit ? (
                 <select
@@ -1135,7 +1150,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
 
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Đơn Vị Người Giao (Gắn với danh sách đơn vị):
+                  Đơn Vị Người Giao:
                 </label>
                 <div className="relative">
                   <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1210,25 +1225,19 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                   onTranscript={(newText) => setDescription(newText)}
                   mode="append"
                   tooltip="Đọc nội dung để thêm vào mô tả"
-                  buttonText="Nói mô tả"
                 />
                 <button
                   type="button"
                   onClick={handleGenerateDescription}
                   disabled={isGeneratingDesc || !title.trim()}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold border border-indigo-200 transition-all cursor-pointer disabled:opacity-50"
+                  className="p-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
                   title="AI viết mô tả hành động cá nhân bằng ngôn từ gần gũi, dễ hiểu"
+                  aria-label="AI viết mô tả hành động"
                 >
                   {isGeneratingDesc ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      AI đang viết...
-                    </>
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
                   ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                      AI Viết mô tả hành động
-                    </>
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
                   )}
                 </button>
               </div>
@@ -1271,7 +1280,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 <span>💡 AI có thể phân tích nội dung trên để tự động gợi ý checklist việc bạn cần làm.</span>
                 <button
                   type="button"
-                  onClick={() => setShowBreakdownOptions(true)}
+                  onClick={() => handleBreakdownTask({ granularity: 'phased', keepCompletedOrCustom: false })}
                   className="font-bold underline hover:text-indigo-900 cursor-pointer"
                 >
                   Phân rã checklist ngay →
@@ -1280,402 +1289,21 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             )}
           </div>
 
-          {/* 4. Task nhiệm vụ (Checklist Subtasks) with Full User Editability */}
-          <div className="space-y-3 p-4 rounded-2xl bg-slate-50/90 border border-slate-200">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Task nhiệm vụ (Checklist hành động của tôi)
-                  </label>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-extrabold bg-indigo-100 text-indigo-800">
-                    Tiến độ: {liveProgress}%
-                  </span>
-                </div>
-              </div>
+          {/* 4. Task nhiệm vụ (Checklist Phân rã 3 Giai đoạn) */}
+          <PhasedSubtaskList
+            subtasks={subtasks}
+            onChange={setSubtasks}
+            onAiBreakdown={handleBreakdownTask}
+            isGeneratingAi={isGeneratingSubtasks}
+            taskTitle={title}
+          />
 
-              {/* AI Auto Create & WBS Buttons - Compact icon only */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowBreakdownOptions(!showBreakdownOptions)}
-                  className="p-2 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 text-white shadow-xs transition-all cursor-pointer hover:scale-105"
-                  title="AI Tham mưu checklist (WBS)"
-                  aria-label="AI Tham mưu checklist (WBS)"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                </button>
-              </div>
-            </div>
-
-            {/* Expandable Breakdown Configuration Panel */}
-            {showBreakdownOptions && (
-              <div className="p-3.5 rounded-2xl bg-indigo-50/80 border border-indigo-200/90 space-y-3 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-indigo-600" />
-                    Chọn cách AI phân rã các bước hành động cho bạn (ngôn từ dễ hiểu):
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowBreakdownOptions(false)}
-                    className="text-slate-400 hover:text-slate-700 text-xs font-bold"
-                  >
-                    ✕ Đóng
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBreakdownMode('phased')}
-                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
-                      breakdownMode === 'phased'
-                        ? 'bg-white border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-900 shadow-xs'
-                        : 'bg-white/60 border-slate-200 text-slate-700 hover:bg-white'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">
-                      <span>🏁</span> 3 Giai đoạn
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-1">Chuẩn bị → Thực hiện → Hoàn thành</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBreakdownMode('standard')}
-                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
-                      breakdownMode === 'standard'
-                        ? 'bg-white border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-900 shadow-xs'
-                        : 'bg-white/60 border-slate-200 text-slate-700 hover:bg-white'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">
-                      <span>📋</span> Tiêu chuẩn
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-1">5 - 6 việc con thiết thực, cốt lõi</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBreakdownMode('detailed')}
-                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
-                      breakdownMode === 'detailed'
-                        ? 'bg-white border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-900 shadow-xs'
-                        : 'bg-white/60 border-slate-200 text-slate-700 hover:bg-white'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">
-                      <span>🔬</span> Chi tiết từng bước
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-1">7 - 10 việc con tỉ mỉ</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBreakdownMode('deliverables')}
-                    className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
-                      breakdownMode === 'deliverables'
-                        ? 'bg-white border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-900 shadow-xs'
-                        : 'bg-white/60 border-slate-200 text-slate-700 hover:bg-white'
-                    }`}
-                  >
-                    <div className="font-bold text-xs flex items-center gap-1">
-                      <span>📦</span> Sản phẩm đầu ra
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-1">Kết quả và hồ sơ bàn giao</div>
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-indigo-100 text-xs">
-                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
-                    <input
-                      type="checkbox"
-                      checked={breakdownAppend}
-                      onChange={(e) => setBreakdownAppend(e.target.checked)}
-                      className="rounded-sm text-indigo-600"
-                    />
-                    <span>Thêm vào danh sách hiện có (không xóa việc cũ)</span>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => handleBreakdownTask()}
-                    disabled={isGeneratingSubtasks || (!title.trim() && !description.trim())}
-                    className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {isGeneratingSubtasks ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        AI đang chia nhỏ...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                        Tạo checklist việc của tôi
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* AI Research Insight Callout Banner (Editable by user!) */}
-            {aiAnalysis && (
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-50 via-violet-50 to-blue-50 border border-indigo-200/90 space-y-1.5 animate-in fade-in duration-200 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
-                    <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <span>💡 Tham mưu chiến lược từ AI (Dành riêng cho phần việc của bạn):</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEditingAiAnalysis(!isEditingAiAnalysis);
-                        setCustomAiAnalysisInput(aiAnalysis || '');
-                      }}
-                      className="text-[11px] text-indigo-600 hover:text-indigo-900 font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      <span>{isEditingAiAnalysis ? 'Đóng sửa' : 'Chỉnh sửa'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAiAnalysis(null)}
-                      className="text-[11px] text-slate-400 hover:text-slate-700 font-semibold cursor-pointer px-1 py-0.5 rounded-md hover:bg-indigo-100/50"
-                      title="Ẩn phân tích"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-
-                {isEditingAiAnalysis ? (
-                  <div className="space-y-2 pt-1">
-                    <textarea
-                      rows={2}
-                      value={customAiAnalysisInput}
-                      onChange={(e) => setCustomAiAnalysisInput(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-indigo-300 bg-white text-xs text-slate-800 focus:outline-hidden"
-                      placeholder="Nhập nội dung phân tích / lời khuyên tùy chỉnh của bạn..."
-                    />
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingAiAnalysis(false)}
-                        className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200"
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveAiAnalysisEdit}
-                        className="px-3 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700"
-                      >
-                        Lưu lời khuyên
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-700 leading-relaxed font-normal whitespace-pre-line">
-                    {aiAnalysis}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Breakdown Success Notification */}
-            {breakdownSuccessMsg && (
-              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{breakdownSuccessMsg}</span>
-              </div>
-            )}
-
-            {/* Progress bar visual */}
-            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-indigo-500 to-emerald-500 h-full transition-all duration-300"
-                style={{ width: `${liveProgress}%` }}
-              />
-            </div>
-
-            {/* Subtasks List with Inline Editing for Every Subtask */}
-            <div className="space-y-2 mt-2">
-              {subtasks.map((subtask, index) => {
-                const isCurrentlyEditing = editingSubtaskId === subtask.id;
-
-                if (isCurrentlyEditing) {
-                  return (
-                    <div
-                      key={subtask.id}
-                      className="p-3.5 rounded-xl border-2 border-indigo-400 bg-indigo-50/50 space-y-2.5 animate-in fade-in duration-150"
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-indigo-950">
-                        <span>Chỉnh sửa việc con #{index + 1}:</span>
-                        <span className="text-[10px] text-indigo-700">Tùy biến nội dung do AI tạo</span>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-slate-700 block">Tên việc con:</label>
-                        <input
-                          type="text"
-                          value={editSubtaskTitle}
-                          onChange={(e) => setEditSubtaskTitle(e.target.value)}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-medium focus:border-indigo-600 outline-hidden"
-                          placeholder="Tên công việc con..."
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-700 block mb-0.5">Giai đoạn:</label>
-                          <input
-                            type="text"
-                            value={editSubtaskPhase}
-                            onChange={(e) => setEditSubtaskPhase(e.target.value)}
-                            placeholder="VD: Chuẩn bị, Thực hiện, Hoàn thành..."
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs outline-hidden"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-700 block mb-0.5">Tên tài liệu tham khảo (nếu có):</label>
-                          <input
-                            type="text"
-                            value={editSubtaskDocTitle}
-                            onChange={(e) => setEditSubtaskDocTitle(e.target.value)}
-                            placeholder="VD: Mẫu biên bản họp, Tài liệu quy chuẩn..."
-                            className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs outline-hidden"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={handleCancelEditSubtask}
-                          className="px-3 py-1 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
-                        >
-                          Hủy
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveEditSubtask}
-                          disabled={!editSubtaskTitle.trim()}
-                          className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Lưu việc con</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={subtask.id}
-                    className={`p-3 rounded-xl border transition-all flex items-start gap-3 ${
-                      subtask.completed ? 'bg-emerald-50/60 border-emerald-200' : 'bg-white border-slate-200'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      id={`subtask-check-${subtask.id}`}
-                      checked={subtask.completed}
-                      onChange={() => handleToggleSubtask(subtask.id)}
-                      className="mt-1 w-4 h-4 rounded-sm text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {subtask.phase && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200/80 shrink-0">
-                            {subtask.phase}
-                          </span>
-                        )}
-                        <label
-                          htmlFor={`subtask-check-${subtask.id}`}
-                          className={`text-xs sm:text-sm font-medium cursor-pointer ${
-                            subtask.completed ? 'line-through text-slate-400' : 'text-slate-800'
-                          }`}
-                        >
-                          {index + 1}. {subtask.title}
-                        </label>
-                      </div>
-
-                      {/* Linked external resource */}
-                      {subtask.resource && (
-                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase">Tài liệu:</span>
-                          <a
-                            href={subtask.resource.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200/80"
-                          >
-                            <span>{subtask.resource.title}</span>
-                            <ExternalLink className="w-3 h-3 shrink-0" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Actions: Edit subtask & Delete subtask */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditSubtask(subtask)}
-                        title="Chỉnh sửa nội dung việc con này"
-                        className="text-slate-400 hover:text-indigo-600 p-1 rounded-md transition-colors cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSubtask(subtask.id)}
-                        aria-label={`Xóa hạng mục ${subtask.title}`}
-                        className="text-slate-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Add manual subtask row */}
-            <div className="flex gap-2 pt-1">
-              <input
-                type="text"
-                value={newSubtaskTitle}
-                onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSubtask();
-                  }
-                }}
-                placeholder="+ Thêm nhanh một công việc con..."
-                className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:border-indigo-500 outline-hidden"
-              />
-              <button
-                type="button"
-                onClick={handleAddSubtask}
-                className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-              >
-                Thêm
-              </button>
-            </div>
-          </div>
-
-          {/* 5. Thời gian bắt đầu & Hạn chót */}
+          {/* 5. Thời gian thực hiện */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                Thời gian bắt đầu (Khởi tạo)
+                Thời gian bắt đầu
               </label>
               <input
                 type="datetime-local"
@@ -1683,13 +1311,12 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 onChange={(e) => setCreatedAt(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-medium text-slate-800 focus:border-indigo-600 outline-hidden"
               />
-              <span className="text-[11px] text-slate-500">Mặc định tính từ lúc tạo nhiệm vụ</span>
             </div>
 
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-rose-600" />
-                Thời gian hoàn thành (Hạn chót) <span className="text-rose-500">*</span>
+                Thời gian hoàn thành <span className="text-rose-500">*</span>
               </label>
               <input
                 type="datetime-local"

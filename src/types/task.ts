@@ -1,3 +1,5 @@
+export type TaskPhaseId = 'preparation' | 'execution' | 'conclusion';
+
 export interface SubtaskResource {
   title: string;
   url: string;
@@ -6,10 +8,16 @@ export interface SubtaskResource {
 
 export interface Subtask {
   id: string;
-  title: string;
+  title: string; // Tên nhiệm vụ: Ngắn gọn, rõ hành động
   completed: boolean;
-  phase?: string;
+  phase?: string; // Tên hiển thị giai đoạn (e.g. 'Giai đoạn 1: Chuẩn bị', 'Giai đoạn 2: Triển khai', 'Giai đoạn 3: Tổng kết – Hoàn thành')
+  phaseId?: TaskPhaseId; // Định danh chuẩn hóa giai đoạn
+  completionCriteria?: string; // Tiêu chuẩn hoàn thành: Điều kiện cụ thể để xác định đã đạt yêu cầu
+  implementationSteps?: string[]; // Chi tiết thực hiện: Hướng dẫn từng bước, dễ hiểu và thực tế
+  deliverable?: string; // Sản phẩm đầu ra: Kết quả cụ thể cần tạo ra
+  relatedDocuments?: string; // Tài liệu liên quan: Tài liệu cần chuẩn bị hoặc tham khảo
   resource?: SubtaskResource;
+  notes?: string;
 }
 
 export interface TaskAttachment {

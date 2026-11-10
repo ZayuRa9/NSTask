@@ -3,6 +3,13 @@
   "appId": "1:529903668673:web:65ec6c46ffaa89eca87340",
   "apiKey": "AIzaSyAr6BgvVSKKSi3a3Fz7OFmy2rIskKYWbzQ",
   "authDomain": "gen-lang-client-0447949351.firebaseapp.com",
+  "authorizedAuthDomains": [
+    "gen-lang-client-0447949351.firebaseapp.com",
+    "gen-lang-client-0447949351.web.app",
+    "ais-dev-gvntdudmjrunzddrw5rzey-421995608765.asia-southeast1.run.app",
+    "ais-pre-gvntdudmjrunzddrw5rzey-421995608765.asia-southeast1.run.app",
+    "localhost"
+  ],
   "storageBucket": "gen-lang-client-0447949351.firebasestorage.app",
   "messagingSenderId": "529903668673",
   "measurementId": "",

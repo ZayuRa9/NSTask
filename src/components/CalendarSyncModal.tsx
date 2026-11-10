@@ -12,6 +12,8 @@ import {
   X,
   ShieldCheck,
   Globe,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Task, ExternalCalendarEvent, GoogleCalendarSyncState } from '../types/task';
 import {
@@ -47,6 +49,7 @@ export const CalendarSyncModal: React.FC<CalendarSyncModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   if (!isOpen) return null;
 
@@ -134,15 +137,7 @@ export const CalendarSyncModal: React.FC<CalendarSyncModalProps> = ({
               <Calendar className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-slate-900">Đồng Bộ Hai Chiều Google Calendar</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                  Asia/Ho_Chi_Minh
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Tự động liên kết công việc với lịch Google, cập nhật 2 chiều và quản lý sự kiện ngoại vi.
-              </p>
+              <h3 className="text-lg font-bold text-slate-900">Đồng Bộ Hai Chiều Google Calendar</h3>
             </div>
           </div>
           <button
@@ -176,24 +171,19 @@ export const CalendarSyncModal: React.FC<CalendarSyncModalProps> = ({
                     <span className="text-xs font-normal text-emerald-700">({syncState.userEmail})</span>
                   )}
                 </div>
-                <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span>
-                    Múi giờ: <strong>Asia/Ho_Chi_Minh (GMT+7)</strong>
-                  </span>
-                  {syncState.lastSyncedAt && (
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      Đồng bộ gần nhất:{' '}
-                      {new Date(syncState.lastSyncedAt).toLocaleTimeString('vi-VN', {
-                        timeZone: 'Asia/Ho_Chi_Minh',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        day: '2-digit',
-                        month: '2-digit',
-                      })}
-                    </span>
-                  )}
-                </div>
+                {syncState.lastSyncedAt && (
+                  <div className="text-xs text-slate-600 mt-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-400" />
+                    Đồng bộ gần nhất:{' '}
+                    {new Date(syncState.lastSyncedAt).toLocaleTimeString('vi-VN', {
+                      timeZone: 'Asia/Ho_Chi_Minh',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      day: '2-digit',
+                      month: '2-digit',
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -231,9 +221,46 @@ export const CalendarSyncModal: React.FC<CalendarSyncModalProps> = ({
 
           {/* Feedback Messages */}
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 animate-in fade-in">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-2 animate-in fade-in">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{errorMessage}</span>
+              </div>
+              {errorMessage.includes('unauthorized-domain') && (
+                <div className="pt-1 flex flex-wrap items-center gap-2 border-t border-rose-200/80">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+                      await navigator.clipboard.writeText(host).catch(() => {});
+                      setCopiedDomain(true);
+                      setTimeout(() => setCopiedDomain(false), 3000);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    {copiedDomain ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Đã sao chép miền!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Sao chép tên miền</span>
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href="https://console.firebase.google.com/project/gen-lang-client-0447949351/authentication/settings"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-rose-300 text-rose-800 font-bold text-[11px] hover:bg-rose-50 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    <span>Mở Firebase Authorized Domains</span>
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -316,7 +343,6 @@ export const CalendarSyncModal: React.FC<CalendarSyncModalProps> = ({
                 <Calendar className="w-4 h-4 text-blue-600" />
                 <span>Sự Kiện Từ Google Calendar Ngoài ({externalEvents.length}):</span>
               </div>
-              <span className="text-[11px] text-slate-400">Hiển thị lịch riêng biệt, không tự biến thành task</span>
             </div>
 
             {externalEvents.length === 0 ? (
