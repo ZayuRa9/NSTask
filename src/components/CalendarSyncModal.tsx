@@ -70,6 +70,14 @@ export const CalendarSyncModal: React.FC<CalendarSyncModalProps> = ({
       // Trigger first sync immediately
       handleSyncNow();
     } catch (err: any) {
+      if (
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        (typeof err?.message === 'string' &&
+          (err.message.includes('popup-closed-by-user') || err.message.includes('cancelled-popup-request')))
+      ) {
+        return;
+      }
       setErrorMessage(err.message || 'Lỗi kết nối Google Calendar.');
     } finally {
       setIsConnecting(false);

@@ -77,9 +77,11 @@ if (typeof window !== 'undefined') {
       .join(' ');
     if (
       fullText.includes('token-service-api-has-not-been-used') ||
+      fullText.includes('popup-closed-by-user') ||
+      fullText.includes('cancelled-popup-request') ||
       (fullText.includes('@firebase/firestore') && fullText.includes('Could not reach Cloud Firestore'))
     ) {
-      console.warn('[Firestore Offline Fallback]', ...args);
+      console.warn('[Firebase Auth/Firestore Notice]', ...args);
       return;
     }
     originalConsoleError.apply(console, args);

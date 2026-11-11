@@ -331,10 +331,25 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
 
       onLoginSuccess(userAccount, loadedTasks);
     } catch (err: any) {
+      const isPopupClosed =
+        err?.code === 'auth/popup-closed-by-user' ||
+        err?.code === 'auth/cancelled-popup-request' ||
+        (typeof err?.message === 'string' &&
+          (err.message.includes('popup-closed-by-user') ||
+            err.message.includes('cancelled-popup-request') ||
+            err.message.includes('closed by the user')));
+
+      if (isPopupClosed) {
+        // User closed or dismissed the Google popup dialog voluntarily - normal user gesture, not a failure
+        console.info('[Google Sign-in] Đã đóng cửa sổ đăng nhập Google.');
+        setErrorMessage(null);
+        return;
+      }
+
       console.error('Google Sign-in error:', err);
       const isUnauthorizedDomain =
-        err.code === 'auth/unauthorized-domain' ||
-        (typeof err.message === 'string' && err.message.toLowerCase().includes('unauthorized-domain'));
+        err?.code === 'auth/unauthorized-domain' ||
+        (typeof err?.message === 'string' && err.message.toLowerCase().includes('unauthorized-domain'));
 
       if (isUnauthorizedDomain) {
         const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -346,10 +361,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
         setErrorMessage(
           `Tên miền (${currentHost || 'này'}) chưa được ủy quyền trong Firebase Auth (auth/unauthorized-domain). Bạn có thể xem hướng dẫn thêm miền ở khung trợ giúp bên dưới, hoặc bấm "Đăng nhập ngay với Google Email" để vào làm việc ngay lập tức không bị gián đoạn!`
         );
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        setErrorMessage('Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất.');
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        // Ignored
       } else {
         setErrorMessage(`Lỗi xác thực Google: ${err.message || 'Không thể kết nối.'}`);
       }
