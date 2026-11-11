@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CheckSquare,
   Lock,
@@ -28,6 +28,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   updateProfile,
+  onAuthStateChanged,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import {
@@ -49,7 +50,20 @@ interface AuthViewProps {
 const getLocalUsers = (): UserAccount[] => {
   try {
     const raw = localStorage.getItem('taskmaster_users');
-    return raw ? JSON.parse(raw) : [];
+    const rawAlt = localStorage.getItem('taskmaster_local_accounts');
+    const users1: UserAccount[] = raw ? JSON.parse(raw) : [];
+    const users2: UserAccount[] = rawAlt ? JSON.parse(rawAlt) : [];
+    const map = new Map<string, UserAccount>();
+    users1.forEach((u) => {
+      if (u && u.id) map.set(u.id, u);
+    });
+    users2.forEach((u) => {
+      if (u && u.id) {
+        const prev = map.get(u.id);
+        map.set(u.id, { ...prev, ...u });
+      }
+    });
+    return Array.from(map.values());
   } catch {
     return [];
   }
@@ -58,6 +72,7 @@ const getLocalUsers = (): UserAccount[] => {
 const saveLocalUsers = (users: UserAccount[]) => {
   try {
     localStorage.setItem('taskmaster_users', JSON.stringify(users));
+    localStorage.setItem('taskmaster_local_accounts', JSON.stringify(users));
   } catch {}
 };
 
@@ -95,6 +110,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
   const [directGoogleName, setDirectGoogleName] = useState('Nguyễn Soạn');
   const [showDirectGoogleLogin, setShowDirectGoogleLogin] = useState(false);
 
+  const isManualActionRunning = useRef(false);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -129,6 +146,77 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
     }
   }, [onLoginSuccess]);
 
+  // Use onAuthStateChanged to monitor Firebase authentication state and restore session
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      // If a manual form action is actively processing, let that flow finish
+      if (isManualActionRunning.current) return;
+      if (!fbUser) return;
+
+      try {
+        // Check if there is already a current user session in localStorage
+        const rawCurrent = localStorage.getItem('taskmaster_current_user');
+        let currentAccount: UserAccount | null = null;
+        if (rawCurrent) {
+          try {
+            currentAccount = JSON.parse(rawCurrent);
+          } catch {}
+        }
+
+        // If an active session already exists for this Firebase user, keep Firestore in sync
+        if (currentAccount && currentAccount.id === fbUser.uid) {
+          if (isFirestoreReadyForUser(fbUser.uid)) {
+            saveUserToFirestore(currentAccount).catch(() => {});
+          }
+          return;
+        }
+
+        // Otherwise restore session from LocalStorage or Firestore
+        const localUsers = getLocalUsers();
+        let userAccount: UserAccount | null =
+          localUsers.find(
+            (u) => u.id === fbUser.uid || u.email?.toLowerCase() === fbUser.email?.toLowerCase()
+          ) || null;
+
+        if (!userAccount && isFirestoreReadyForUser(fbUser.uid)) {
+          userAccount = await getUserFromFirestore(fbUser.uid).catch(() => null);
+        }
+
+        if (userAccount) {
+          const nowIso = new Date().toISOString();
+          const restoredAccount: UserAccount = {
+            ...userAccount,
+            id: fbUser.uid,
+            email: fbUser.email || userAccount.email,
+            lastActiveAt: nowIso,
+          };
+
+          // Save immediately to localStorage
+          const updatedList = localUsers.map((u) =>
+            u.id === restoredAccount.id ? restoredAccount : u
+          );
+          if (!updatedList.some((u) => u.id === restoredAccount.id)) {
+            updatedList.push(restoredAccount);
+          }
+          saveLocalUsers(updatedList);
+          localStorage.setItem('taskmaster_current_user', JSON.stringify(restoredAccount));
+
+          // Cross-reference with Firestore before triggering state change
+          if (isFirestoreReadyForUser(fbUser.uid)) {
+            await saveUserToFirestore(restoredAccount).catch(() => {});
+          }
+
+          const tasks = await fetchTasksFromFirestore(fbUser.uid).catch(() => []);
+          onLoginSuccess(restoredAccount, tasks);
+        }
+      } catch (err) {
+        console.warn('[AuthView] onAuthStateChanged observer notice:', err);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [onLoginSuccess]);
+
   // Password strength score (0 to 4)
   const calculateStrength = (pass: string): number => {
     if (!pass) return 0;
@@ -154,6 +242,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
    * 1. Google One-Click Single Sign-On via Firebase
    */
   const handleGoogleSignIn = async () => {
+    isManualActionRunning.current = true;
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsLoading(true);
@@ -266,6 +355,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       }
     } finally {
       setIsLoading(false);
+      isManualActionRunning.current = false;
     }
   };
 
@@ -300,6 +390,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       return;
     }
 
+    isManualActionRunning.current = true;
     setIsLoading(true);
     setLoadingText('Đang nạp dữ liệu tài khoản Google & chuẩn bị không gian làm việc...');
     setErrorMessage(null);
@@ -410,6 +501,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       setErrorMessage(`Lỗi đăng nhập dự phòng: ${err.message || 'Không thể đăng nhập.'}`);
     } finally {
       setIsLoading(false);
+      isManualActionRunning.current = false;
     }
   };
 
@@ -427,137 +519,191 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       return;
     }
 
+    isManualActionRunning.current = true;
     setIsLoading(true);
     setLoadingText('Đang xác thực thông tin đăng nhập...');
 
     try {
-      // 1. Try Firebase Auth if input is an email
+      // 1. Try Firebase Auth if input is an email, or if username matches a known local account with email
       const isEmail = cleanInput.includes('@');
-      let fbUser: any = null;
+      let loginEmail = isEmail ? cleanInput : '';
+      if (!loginEmail) {
+        const localUsers = getLocalUsers();
+        const matched = localUsers.find(
+          (u) => u.username?.trim().toLowerCase() === cleanInput && u.email?.includes('@')
+        );
+        if (matched) {
+          loginEmail = matched.email.trim().toLowerCase();
+        }
+      }
 
-      if (isOnline && isEmail) {
+      let fbUser: any = null;
+      let userAccount: UserAccount | null = null;
+      let userTasks: Task[] = [];
+
+      if (isOnline && loginEmail) {
         try {
-          const cred = await signInWithEmailAndPassword(auth, cleanInput, password);
+          const cred = await signInWithEmailAndPassword(auth, loginEmail, password);
           fbUser = cred.user;
+
+          // Assemble user session immediately upon signInWithEmailAndPassword
+          let existingLocal = getLocalUsers().find(
+            (u) => u.id === fbUser.uid || u.email?.toLowerCase() === loginEmail
+          );
+          const nowIso = new Date().toISOString();
+          const signedInAccount: UserAccount = existingLocal
+            ? {
+                ...existingLocal,
+                id: fbUser.uid,
+                email: fbUser.email || loginEmail,
+                password,
+                lastActiveAt: nowIso,
+              }
+            : {
+                id: fbUser.uid,
+                username: fbUser.displayName || fbUser.email?.split('@')[0] || cleanInput,
+                email: fbUser.email || loginEmail,
+                authProvider: 'firebase',
+                password,
+                isProfileCompleted: true,
+                syncCode: `TM-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+                profile: {
+                  displayName: fbUser.displayName || 'Cán bộ',
+                  role: '',
+                  units: [],
+                  birthDate: '1995-01-01',
+                  avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+                    fbUser.email || loginEmail
+                  )}`,
+                  email: fbUser.email || loginEmail,
+                  weeklyGoal: 3,
+                  notifications: {
+                    browserEnabled: true,
+                    soundEnabled: true,
+                    priorityReminders: true,
+                    overdueAlerts: true,
+                  },
+                  connectedAppsList: [],
+                },
+                createdAt: nowIso,
+                lastActiveAt: nowIso,
+                lastSyncedAt: nowIso,
+              };
+
+          // Store immediately in localStorage upon signInWithEmailAndPassword
+          const localList = getLocalUsers();
+          const idx = localList.findIndex(
+            (u) => u.id === signedInAccount.id || u.email?.toLowerCase() === loginEmail
+          );
+          if (idx >= 0) localList[idx] = signedInAccount;
+          else localList.push(signedInAccount);
+          saveLocalUsers(localList);
+          localStorage.setItem('taskmaster_current_user', JSON.stringify(signedInAccount));
+
+          // Cross-reference with saveUserToFirestore to guarantee persistence before redirect or state change
+          await saveUserToFirestore(signedInAccount).catch((err) => {
+            console.warn('[Firestore] Pre-redirect saveUserToFirestore warning:', err);
+          });
+
+          userAccount = signedInAccount;
+          userTasks = await fetchTasksFromFirestore(fbUser.uid).catch(() => []);
         } catch (fbErr: any) {
           console.warn('Firebase Auth notice:', fbErr.code);
         }
       }
 
-      // 2. Query backend or Firestore
-      let userAccount: UserAccount | null = null;
-      let userTasks: Task[] = [];
-
-      if (fbUser) {
-        // Logged in with Firebase
-        userAccount = await getUserFromFirestore(fbUser.uid).catch(() => null);
-        if (!userAccount) {
-          userAccount = {
-            id: fbUser.uid,
-            username: fbUser.displayName || fbUser.email?.split('@')[0] || cleanInput,
-            email: fbUser.email || cleanInput,
-            authProvider: 'firebase',
-            isProfileCompleted: true,
-            syncCode: `TM-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-            profile: {
-              displayName: fbUser.displayName || 'Cán bộ',
-              role: '',
-              units: [],
-              birthDate: '1995-01-01',
-              avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
-                fbUser.email || cleanInput
-              )}`,
-              email: fbUser.email || cleanInput,
-              weeklyGoal: 3,
-              notifications: {
-                browserEnabled: true,
-                soundEnabled: true,
-                priorityReminders: true,
-                overdueAlerts: true,
-              },
-              connectedAppsList: [],
-            },
-            createdAt: new Date().toISOString(),
-            lastActiveAt: new Date().toISOString(),
-          };
-          await saveUserToFirestore(userAccount).catch(() => {});
-        }
-        userTasks = await fetchTasksFromFirestore(fbUser.uid).catch(() => []);
-      } else if (isOnline) {
+      // 2. Query backend or Firestore if not resolved via Firebase Auth
+      if (!userAccount && isOnline) {
         // Fallback to Express backend database
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: cleanInput, password }),
-        });
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: cleanInput, password }),
+          });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user) {
-            const authedAccount: UserAccount = {
-              ...data.user,
-              password,
-              authProvider: 'password',
-            };
-            userAccount = authedAccount;
-            userTasks = Array.isArray(data.tasks) ? data.tasks : [];
+          if (res.ok) {
+            const data = await res.json();
+            if (data.user) {
+              const authedAccount: UserAccount = {
+                ...data.user,
+                password,
+                authProvider: 'password',
+              };
+              userAccount = authedAccount;
+              userTasks = Array.isArray(data.tasks) ? data.tasks : [];
 
-            // Background sync with Firestore if authenticated in Firebase
-            if (isFirestoreReadyForUser(authedAccount.id)) {
-              saveUserToFirestore(authedAccount).catch(() => {});
+              // Background sync with Firestore if authenticated in Firebase
+              if (isFirestoreReadyForUser(authedAccount.id)) {
+                saveUserToFirestore(authedAccount).catch(() => {});
+              }
             }
+          } else if (res.status === 401) {
+            setErrorMessage('Mật khẩu không chính xác. Vui lòng kiểm tra lại.');
+            setIsLoading(false);
+            return;
           }
-        } else if (res.status === 401) {
-          setErrorMessage('Mật khẩu không chính xác. Vui lòng kiểm tra lại.');
-          setIsLoading(false);
-          return;
-        } else if (res.status === 404) {
-          setErrorMessage(
-            'Tài khoản không tồn tại trên hệ thống hoặc đã tự động bị xóa do không hoạt động trong 3 ngày. Bạn có thể bấm "Đăng ký mới".'
-          );
-          setIsLoading(false);
-          return;
+          // Note: If res.status === 404, we intentionally do NOT exit early!
+          // We proceed to check local persistent cache and Firestore below.
+        } catch (fetchErr) {
+          console.warn('Backend login fetch notice:', fetchErr);
         }
       }
 
-      // 3. Offline fallback
+      // 3. Robust Local and Offline Fallback (checks persistent localStorage)
       if (!userAccount) {
         const localUsers = getLocalUsers();
         const found = localUsers.find(
-          (u) => u.username.toLowerCase() === cleanInput || u.email?.toLowerCase() === cleanInput
+          (u) =>
+            u.username?.trim().toLowerCase() === cleanInput ||
+            u.email?.trim().toLowerCase() === cleanInput
         );
 
-        if (!found) {
-          setErrorMessage(
-            'Không tìm thấy tài khoản. Vui lòng kiểm tra lại hoặc bấm "Đăng ký mới" để tạo tài khoản.'
-          );
-          setIsLoading(false);
-          return;
-        }
+        if (found) {
+          if (found.password && found.password !== password) {
+            setErrorMessage('Mật khẩu không chính xác. Vui lòng kiểm tra lại.');
+            setIsLoading(false);
+            return;
+          }
 
-        if (found.password && found.password !== password) {
-          setErrorMessage('Mật khẩu không chính xác.');
-          setIsLoading(false);
-          return;
-        }
+          userAccount = found;
+          try {
+            const raw = localStorage.getItem(`taskmaster_tasks_${found.id}`);
+            if (raw) userTasks = JSON.parse(raw);
+          } catch {}
 
-        userAccount = found;
-        try {
-          const raw = localStorage.getItem(`taskmaster_tasks_${found.id}`);
-          if (raw) userTasks = JSON.parse(raw);
-        } catch {}
+          // Synchronize this valid local user back to the server so users.json has it permanently
+          if (isOnline) {
+            fetch('/api/auth/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                username: found.username,
+                email: found.email,
+                password: found.password || password,
+                displayName: found.profile?.displayName || found.username,
+              }),
+            }).catch(() => {});
+          }
+        }
       }
 
+      // 4. If account still not found anywhere:
       if (!userAccount) {
-        setErrorMessage('Không thể xác thực tài khoản. Vui lòng thử lại.');
+        setErrorMessage(
+          'Tài khoản không tồn tại trên hệ thống hoặc đã tự động bị xóa do không hoạt động trong 3 ngày. Bạn có thể bấm "Đăng ký mới".'
+        );
         setIsLoading(false);
         return;
       }
 
-      // Success post-processing
+      // Success post-processing: Save into local cache
       const localUsers = getLocalUsers();
       const existingIdx = localUsers.findIndex(
-        (u) => u.id === userAccount!.id || u.username.toLowerCase() === cleanInput
+        (u) =>
+          u.id === userAccount!.id ||
+          u.username?.toLowerCase() === cleanInput ||
+          u.email?.toLowerCase() === cleanInput
       );
       if (existingIdx >= 0) {
         localUsers[existingIdx] = { ...userAccount, password };
@@ -567,6 +713,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       saveLocalUsers(localUsers);
 
       localStorage.setItem(`taskmaster_tasks_${userAccount.id}`, JSON.stringify(userTasks));
+      localStorage.setItem('taskmaster_current_user', JSON.stringify({ ...userAccount, password }));
 
       // Record device session and log
       if (isOnline && isFirestoreReadyForUser(userAccount.id)) {
@@ -591,6 +738,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       setErrorMessage(`Lỗi đăng nhập: ${err.message || 'Vui lòng kiểm tra lại thông tin.'}`);
     } finally {
       setIsLoading(false);
+      isManualActionRunning.current = false;
     }
   };
 
@@ -626,36 +774,165 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
       return;
     }
 
+    isManualActionRunning.current = true;
     setIsLoading(true);
     setLoadingText('Đang tạo tài khoản & phân vùng lưu trữ...');
 
     try {
       let createdUserId: string | null = null;
       let newAccount: UserAccount | null = null;
+      const nowIso = new Date().toISOString();
 
-      // 1. Try Firebase Auth registration if online
+      // 1. Check local cache first: If exact account and password already exist locally, reuse it seamlessly
+      const localUsersBefore = getLocalUsers();
+      const existingLocal = localUsersBefore.find(
+        (u) =>
+          u.username?.trim().toLowerCase() === cleanUser ||
+          u.email?.trim().toLowerCase() === cleanEmail
+      );
+      if (existingLocal) {
+        if (existingLocal.password && existingLocal.password !== password) {
+          setErrorMessage('Tên đăng nhập hoặc email này đã tồn tại trên hệ thống. Vui lòng chọn tên hoặc email khác.');
+          setIsLoading(false);
+          isManualActionRunning.current = false;
+          return;
+        }
+        // If password matches, reuse existing account
+        createdUserId = existingLocal.id;
+        newAccount = existingLocal;
+      }
+
+      // 2. Try Firebase Auth registration if online (non-blocking cloud layer)
       if (isOnline) {
         try {
           const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
           await updateProfile(cred.user, { displayName: cleanName });
           createdUserId = cred.user.uid;
+
+          // Assemble user object immediately upon createUserWithEmailAndPassword
+          newAccount = {
+            id: cred.user.uid,
+            username: cleanUser,
+            email: cleanEmail,
+            password,
+            authProvider: 'firebase',
+            isProfileCompleted: true,
+            syncCode: `TM-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+            profile: {
+              displayName: cleanName,
+              role: '',
+              units: [],
+              birthDate: '1995-01-01',
+              avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanUser)}`,
+              email: cleanEmail,
+              weeklyGoal: 3,
+              notifications: {
+                browserEnabled: true,
+                soundEnabled: true,
+                priorityReminders: true,
+                overdueAlerts: true,
+              },
+              connectedAppsList: [],
+            },
+            createdAt: nowIso,
+            lastActiveAt: nowIso,
+            lastSyncedAt: nowIso,
+          };
+
+          // Store immediately in localStorage upon createUserWithEmailAndPassword
+          const currentLocalUsers = getLocalUsers();
+          const matchIdx = currentLocalUsers.findIndex(
+            (u) =>
+              u.id === newAccount!.id ||
+              u.username?.toLowerCase() === cleanUser ||
+              u.email?.toLowerCase() === cleanEmail
+          );
+          if (matchIdx >= 0) {
+            currentLocalUsers[matchIdx] = newAccount;
+          } else {
+            currentLocalUsers.push(newAccount);
+          }
+          saveLocalUsers(currentLocalUsers);
+          localStorage.setItem('taskmaster_current_user', JSON.stringify(newAccount));
+          localStorage.setItem(`taskmaster_tasks_${newAccount.id}`, JSON.stringify([]));
+          localStorage.setItem(`taskmaster_notes_${newAccount.id}`, JSON.stringify([]));
+
+          // Cross-reference with saveUserToFirestore to guarantee user data is persisted before any redirect or state change
+          await saveUserToFirestore(newAccount).catch((err) => {
+            console.warn('[Firestore] Pre-redirect saveUserToFirestore warning:', err);
+          });
+          await logUserActivityToFirestore(newAccount.id, 'account_created', 'Đăng ký tài khoản thành công').catch(() => {});
         } catch (fbErr: any) {
           console.warn('Firebase createUser notice:', fbErr.code);
+          // If email is already in use in Firebase Auth, attempt signing in to obtain valid auth session & UID
           if (fbErr.code === 'auth/email-already-in-use') {
-            setErrorMessage('Địa chỉ email này đã được đăng ký. Vui lòng chuyển sang "Đăng nhập".');
-            setIsLoading(false);
-            return;
+            try {
+              const signCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+              createdUserId = signCred.user.uid;
+
+              newAccount = {
+                id: signCred.user.uid,
+                username: cleanUser,
+                email: cleanEmail,
+                password,
+                authProvider: 'firebase',
+                isProfileCompleted: true,
+                syncCode: `TM-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+                profile: {
+                  displayName: cleanName,
+                  role: '',
+                  units: [],
+                  birthDate: '1995-01-01',
+                  avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanUser)}`,
+                  email: cleanEmail,
+                  weeklyGoal: 3,
+                  notifications: {
+                    browserEnabled: true,
+                    soundEnabled: true,
+                    priorityReminders: true,
+                    overdueAlerts: true,
+                  },
+                  connectedAppsList: [],
+                },
+                createdAt: nowIso,
+                lastActiveAt: nowIso,
+                lastSyncedAt: nowIso,
+              };
+
+              const currentLocalUsers = getLocalUsers();
+              const matchIdx = currentLocalUsers.findIndex(
+                (u) =>
+                  u.id === newAccount!.id ||
+                  u.username?.toLowerCase() === cleanUser ||
+                  u.email?.toLowerCase() === cleanEmail
+              );
+              if (matchIdx >= 0) {
+                currentLocalUsers[matchIdx] = newAccount;
+              } else {
+                currentLocalUsers.push(newAccount);
+              }
+              saveLocalUsers(currentLocalUsers);
+              localStorage.setItem('taskmaster_current_user', JSON.stringify(newAccount));
+              localStorage.setItem(`taskmaster_tasks_${newAccount.id}`, JSON.stringify([]));
+              localStorage.setItem(`taskmaster_notes_${newAccount.id}`, JSON.stringify([]));
+
+              // Cross-reference with saveUserToFirestore
+              await saveUserToFirestore(newAccount).catch(() => {});
+            } catch (signInErr) {
+              console.warn('Firebase auto sign-in notice:', signInErr);
+            }
           }
         }
       }
 
-      // 2. Also register in server database
+      // 3. Also register in server database (passing createdUserId to align IDs across systems)
       if (isOnline) {
         try {
           const res = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              id: createdUserId || undefined,
               username: cleanUser,
               email: cleanEmail,
               password,
@@ -666,16 +943,24 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
           });
           const serverData = await res.json();
           if (res.ok && serverData.user) {
-            newAccount = { ...serverData.user, password };
+            newAccount = { ...(newAccount || {}), ...serverData.user, password };
             createdUserId = createdUserId || serverData.user.id;
+          } else if (res.status === 409) {
+            setErrorMessage(serverData.error || 'Tên đăng nhập hoặc email này đã tồn tại trên hệ thống.');
+            setIsLoading(false);
+            isManualActionRunning.current = false;
+            return;
           }
-        } catch {}
+        } catch (fetchErr) {
+          console.warn('Backend register notice:', fetchErr);
+        }
       }
 
-      // 3. Fallback or construct new account
-      const nowIso = new Date().toISOString();
+      // 4. Fallback or construct new account
       const finalUserId =
-        createdUserId || `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        createdUserId ||
+        (newAccount && newAccount.id) ||
+        `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
       if (!newAccount) {
         newAccount = {
@@ -683,7 +968,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
           username: cleanUser,
           email: cleanEmail,
           password,
-          authProvider: 'password',
+          authProvider: createdUserId && auth.currentUser ? 'firebase' : 'password',
           isProfileCompleted: true,
           syncCode: `TM-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
           profile: {
@@ -708,34 +993,72 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
           lastActiveAt: nowIso,
           lastSyncedAt: nowIso,
         };
+      } else {
+        newAccount.password = password;
+        if (createdUserId && newAccount.id !== createdUserId) {
+          newAccount.id = createdUserId;
+        }
       }
 
-      // Save into Firestore Database if authenticated with Firebase
-      if (isOnline && isFirestoreReadyForUser(newAccount.id)) {
-        await saveUserToFirestore(newAccount).catch((err) => {
-          console.warn('Firestore initial user write:', err);
-        });
-        await logUserActivityToFirestore(
-          newAccount.id,
-          'account_created',
-          'Đăng ký tài khoản thành công'
-        ).catch(() => {});
-      }
-
-      // Save into local cache
+      // 5. Save into LocalStorage IMMEDIATELY (guaranteed persistence across refresh/restart)
       const localUsers = getLocalUsers();
-      localUsers.push(newAccount);
+      const existingIdx = localUsers.findIndex(
+        (u) =>
+          u.id === newAccount!.id ||
+          u.username?.trim().toLowerCase() === cleanUser ||
+          u.email?.trim().toLowerCase() === cleanEmail
+      );
+      if (existingIdx >= 0) {
+        localUsers[existingIdx] = { ...newAccount, password };
+      } else {
+        localUsers.push({ ...newAccount, password });
+      }
       saveLocalUsers(localUsers);
-      localStorage.setItem(`taskmaster_tasks_${newAccount.id}`, JSON.stringify([]));
 
-      setSuccessMessage('Đăng ký tài khoản thành công! Bạn có thể đăng nhập ngay.');
-      setMode('login');
-      setPassword('');
-      setConfirmPassword('');
+      // Save active session & initialize per-user stores
+      localStorage.setItem('taskmaster_current_user', JSON.stringify({ ...newAccount, password }));
+      if (!localStorage.getItem(`taskmaster_tasks_${newAccount.id}`)) {
+        localStorage.setItem(`taskmaster_tasks_${newAccount.id}`, JSON.stringify([]));
+      }
+      if (!localStorage.getItem(`taskmaster_notes_${newAccount.id}`)) {
+        localStorage.setItem(`taskmaster_notes_${newAccount.id}`, JSON.stringify([]));
+      }
+
+      // 6. Save and sync into Firestore Database if authenticated with Firebase
+      if (isOnline) {
+        setLoadingText('Đang đồng bộ hồ sơ lên Firestore Cloud...');
+        try {
+          if (isFirestoreReadyForUser(newAccount.id)) {
+            await saveUserToFirestore(newAccount);
+            await logUserActivityToFirestore(
+              newAccount.id,
+              'account_created',
+              'Đăng ký tài khoản thành công'
+            );
+          } else if (auth.currentUser) {
+            const syncedAccount = { ...newAccount, id: auth.currentUser.uid };
+            await saveUserToFirestore(syncedAccount);
+            await logUserActivityToFirestore(
+              syncedAccount.id,
+              'account_created',
+              'Đăng ký tài khoản thành công'
+            );
+          }
+        } catch (err) {
+          console.warn('[Firestore] Initial user sync notice:', err);
+        }
+      }
+
+      // Console log to track the user object state after successful sign-up as required
+      console.log('[AuthView] User object state after successful sign-up:', newAccount);
+
+      setSuccessMessage('Đăng ký tài khoản thành công! Đang đăng nhập vào hệ thống...');
+      onLoginSuccess(newAccount, []);
     } catch (err: any) {
       setErrorMessage(`Lỗi đăng ký tài khoản: ${err.message || 'Vui lòng thử lại.'}`);
     } finally {
       setIsLoading(false);
+      isManualActionRunning.current = false;
     }
   };
 
@@ -848,31 +1171,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
               <span>Tiếp tục với tài khoản Google</span>
             </button>
 
-            {/* Helper toggle button for domain resolution & direct Google login */}
-            <div className="flex items-center justify-between px-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDirectGoogleLogin(!showDirectGoogleLogin);
-                  if (!unauthorizedDomainInfo && typeof window !== 'undefined') {
-                    setUnauthorizedDomainInfo({
-                      domain: window.location.hostname,
-                      projectId: 'gen-lang-client-0447949351',
-                    });
-                  }
-                }}
-                className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1.5 cursor-pointer underline underline-offset-2"
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>
-                  {showDirectGoogleLogin
-                    ? 'Thu gọn hỗ trợ domain & đăng nhập nhanh'
-                    : 'Gặp lỗi domain Firebase (auth/unauthorized-domain)? Bấm vào đây'}
-                </span>
-              </button>
-            </div>
-
-            {/* Unauthorized Domain Assistance & Direct Google Sign-In Card */}
+            {/* Unauthorized Domain Assistance & Direct Google Sign-In Card (Shown automatically on error) */}
             {showDirectGoogleLogin && (
               <div className="p-4 rounded-2xl bg-gradient-to-b from-indigo-950/70 to-slate-900/90 border border-indigo-500/40 text-slate-200 text-xs space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-200 shadow-xl">
                 {/* Header */}
@@ -881,8 +1180,18 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, isOnline }) 
                     <ShieldAlert className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                      <span>Xử lý lỗi: auth/unauthorized-domain</span>
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                        <span>Xử lý lỗi: auth/unauthorized-domain</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowDirectGoogleLogin(false)}
+                        className="text-slate-400 hover:text-slate-200 cursor-pointer p-0.5"
+                        title="Đóng bảng này"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
                       Google Firebase yêu cầu tên miền đang chạy ứng dụng phải nằm trong danh sách <strong>Authorized Domains (Miền được ủy quyền)</strong> để mở cửa sổ Google Popup.

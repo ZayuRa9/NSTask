@@ -440,7 +440,7 @@ export default function App() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Sync profile to localStorage and Firestore
+  // Sync profile to localStorage, Backend server, and Firestore
   useEffect(() => {
     if (currentUser) {
       const updatedUser: UserAccount = {
@@ -448,6 +448,33 @@ export default function App() {
         profile: userProfile,
       };
       localStorage.setItem('taskmaster_current_user', JSON.stringify(updatedUser));
+
+      // Update in local registered users cache
+      try {
+        const rawUsers = localStorage.getItem('taskmaster_users');
+        if (rawUsers) {
+          const users: UserAccount[] = JSON.parse(rawUsers);
+          const idx = users.findIndex((u) => u.id === updatedUser.id);
+          if (idx >= 0) {
+            users[idx] = { ...users[idx], profile: userProfile };
+            localStorage.setItem('taskmaster_users', JSON.stringify(users));
+          }
+        }
+      } catch {}
+
+      // Persist to backend server database
+      if (isOnline) {
+        fetch('/api/auth/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            profile: userProfile,
+          }),
+        }).catch(() => {});
+      }
+
+      // Persist to cloud Firestore if authenticated in Firebase
       if (isOnline && auth.currentUser && auth.currentUser.uid === currentUser.id) {
         saveUserToFirestore(updatedUser).catch(() => {});
       }
@@ -766,6 +793,19 @@ export default function App() {
     setUserProfile(account.profile);
     setSoundEnabled(account.profile.notifications?.soundEnabled ?? true);
     localStorage.setItem('taskmaster_current_user', JSON.stringify(account));
+    try {
+      const rawUsers = localStorage.getItem('taskmaster_users');
+      const rawAccounts = localStorage.getItem('taskmaster_local_accounts');
+      const list1: UserAccount[] = rawUsers ? JSON.parse(rawUsers) : [];
+      const list2: UserAccount[] = rawAccounts ? JSON.parse(rawAccounts) : [];
+      const map = new Map<string, UserAccount>();
+      list1.forEach((u) => { if (u && u.id) map.set(u.id, u); });
+      list2.forEach((u) => { if (u && u.id) { const prev = map.get(u.id); map.set(u.id, { ...prev, ...u }); } });
+      map.set(account.id, { ...map.get(account.id), ...account });
+      const combined = Array.from(map.values());
+      localStorage.setItem('taskmaster_users', JSON.stringify(combined));
+      localStorage.setItem('taskmaster_local_accounts', JSON.stringify(combined));
+    } catch {}
 
     // Request persistent storage on this device
     try {

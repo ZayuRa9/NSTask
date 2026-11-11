@@ -47,7 +47,9 @@ import {
   Edit3,
   ChevronDown,
   ChevronUp,
+  QrCode,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { UserProfile, ConnectedAppItem, UserAccount, DeviceSession, Task, TaskAssigner } from '../types/task';
 import { defaultConnectedApps } from '../data/seedData';
 import { playNotificationSound, sendBrowserNotification } from '../utils/audioNotification';
@@ -173,6 +175,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   // Accordion collapse states for compact profile UI
   const [isSyncDevicesOpen, setIsSyncDevicesOpen] = useState(false);
+  const [isApkSectionOpen, setIsApkSectionOpen] = useState(true);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [copiedApkLink, setCopiedApkLink] = useState(false);
+  const [isDownloadingApk, setIsDownloadingApk] = useState(false);
+  const [apkMetadata, setApkMetadata] = useState<{
+    version: string;
+    formattedSize: string;
+    lastUpdated: string;
+    minAndroid: string;
+  }>({
+    version: '2.5.0',
+    formattedSize: '2.4 MB',
+    lastUpdated: '11/11/2026',
+    minAndroid: 'Android 8.0+',
+  });
   const [isIdentityOpen, setIsIdentityOpen] = useState(true);
   const [isUnitsOpen, setIsUnitsOpen] = useState(false);
   const [isAssignerOpen, setIsAssignerOpen] = useState(false);
@@ -305,6 +322,84 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     navigator.clipboard.writeText(syncCode);
     setCopiedSyncCode(true);
     setTimeout(() => setCopiedSyncCode(false), 2000);
+  };
+
+  // Generate QR code for mobile APK download on mount
+  useEffect(() => {
+    let isMounted = true;
+    const initApkDetails = async () => {
+      try {
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const downloadUrl = `${origin}/api/download/apk`;
+
+        const qr = await QRCode.toDataURL(downloadUrl, {
+          width: 240,
+          margin: 1.5,
+          color: {
+            dark: '#0f172a',
+            light: '#ffffff',
+          },
+          errorCorrectionLevel: 'M',
+        });
+
+        if (isMounted) {
+          setQrCodeDataUrl(qr);
+        }
+
+        // Fetch APK dynamic stats
+        const res = await fetch('/api/app/apk-info').catch(() => null);
+        if (res && res.ok && isMounted) {
+          const data = await res.json();
+          setApkMetadata({
+            version: data.version || '2.5.0',
+            formattedSize: data.formattedSize || '2.4 MB',
+            lastUpdated: data.lastUpdated || '11/11/2026',
+            minAndroid: data.minAndroid || 'Android 8.0+',
+          });
+        }
+      } catch (err) {
+        console.warn('[APK QR generation notice]', err);
+      }
+    };
+    initApkDetails();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleDownloadApk = () => {
+    setIsDownloadingApk(true);
+    const downloadUrl = '/api/download/apk';
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = 'NSTask-v2.5.apk';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setStatusNotice({
+      type: 'success',
+      text: '✓ Đang bắt đầu tải tệp "NSTask-v2.5.apk". Vui lòng kiểm tra thanh thông báo hoặc thư mục Downloads trên máy!',
+    });
+    setTimeout(() => {
+      setIsDownloadingApk(false);
+      setStatusNotice(null);
+    }, 4500);
+  };
+
+  const handleCopyApkLink = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const downloadUrl = `${origin}/api/download/apk`;
+    navigator.clipboard.writeText(downloadUrl);
+    setCopiedApkLink(true);
+    setStatusNotice({
+      type: 'success',
+      text: '✓ Đã sao chép liên kết tải APK vào bộ nhớ tạm!',
+    });
+    setTimeout(() => {
+      setCopiedApkLink(false);
+      setStatusNotice(null);
+    }, 2500);
   };
 
   // Pair 2 accounts via sync code
@@ -872,6 +967,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   <span>Ngày sinh: {formatBirthDateVietnamese(formData.birthDate, false)}</span>
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsApkSectionOpen(true);
+                  const el = document.getElementById('apk-download-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-bold border border-emerald-400/30 transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Bấm để chuyển tới mục tải ứng dụng APK cho điện thoại Android"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Tải ứng dụng APK</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              </button>
             </div>
           </div>
         </div>
@@ -902,6 +1011,231 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* TẢI ỨNG DỤNG MOBILE APK (ANDROID) - NSTASK MOBILE */}
+        <div
+          id="apk-download-section"
+          className="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 rounded-3xl text-white shadow-xl border border-emerald-500/30 overflow-hidden transition-all"
+        >
+          <div
+            onClick={() => setIsApkSectionOpen(!isApkSectionOpen)}
+            className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-white/5 transition-colors select-none"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-2.5 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+                <Smartphone className="w-7 h-7 text-white stroke-[2.2]" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight">
+                    Tải Ứng Dụng Mobile APK (Android)
+                  </h3>
+                  <span className="bg-emerald-500/25 text-emerald-300 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                    Bản chính thức v{apkMetadata.version}
+                  </span>
+                  <span className="bg-white/10 text-slate-300 text-[10px] font-medium px-2 py-0.5 rounded-full border border-white/10">
+                    {apkMetadata.minAndroid}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed mt-0.5">
+                  Cài đặt trực tiếp trên điện thoại • Hoạt động 100% ngoại tuyến • Đồng bộ tự động 2 chiều
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadApk();
+                }}
+                disabled={isDownloadingApk}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                {isDownloadingApk ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                <span>Tải APK</span>
+              </button>
+
+              <div className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors">
+                {isApkSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </div>
+            </div>
+          </div>
+
+          {isApkSectionOpen && (
+            <div className="p-5 sm:p-7 pt-2 border-t border-white/10 space-y-6 animate-in fade-in duration-150">
+              {/* Main Grid: Direct Download & QR Code */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                {/* Column 1: Primary Action & Info */}
+                <div className="lg:col-span-7 bg-white/5 backdrop-blur-xs p-5 sm:p-6 rounded-2xl border border-white/10 flex flex-col justify-between space-y-5">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
+                          Gói Cài Đặt Android Thuần (APK Package)
+                        </span>
+                        <h4 className="text-lg sm:text-xl font-black text-white mt-0.5">
+                          NSTask Mobile App v{apkMetadata.version}
+                        </h4>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold font-mono shrink-0">
+                        {apkMetadata.formattedSize}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Ứng dụng quản lý &amp; điều phối nhiệm vụ chuyên trách trên thiết bị di động. Cung cấp đầy đủ các tính năng lập kế hoạch, nhắc việc thông minh bằng âm thanh và nhận diện giọng nói tiếng Việt mượt mà ngay cả khi không có kết nối Internet.
+                    </p>
+
+                    {/* Features checklist */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      <div className="flex items-center gap-2 text-xs text-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Đồng bộ 2 chiều tức thời</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Lưu trữ Offline bảo mật</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Nhập việc bằng giọng nói</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Chuông báo thức đúng giờ</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3 pt-3 border-t border-white/10">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleDownloadApk}
+                        disabled={isDownloadingApk}
+                        className="flex-1 py-3 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isDownloadingApk ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                        ) : (
+                          <Download className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                        )}
+                        <span>Tải file APK (v{apkMetadata.version})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyApkLink}
+                        className="py-3 px-4 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 border border-white/15 transition-all cursor-pointer active:scale-95"
+                        title="Sao chép đường link tải về"
+                      >
+                        {copiedApkLink ? (
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-4 h-4 text-slate-300" />
+                        )}
+                        <span>{copiedApkLink ? 'Đã sao chép!' : 'Sao chép link tải'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                      <span>Tên tệp: <strong className="text-slate-200 font-mono">NSTask-v2.5.apk</strong></span>
+                      <span>Hỗ trợ: <strong className="text-slate-200">Samsung, Xiaomi, Oppo, Vivo, Vsmart...</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column 2: QR Code for Phone Camera Download */}
+                <div className="lg:col-span-5 bg-white/5 backdrop-blur-xs p-5 sm:p-6 rounded-2xl border border-white/10 flex flex-col items-center justify-between space-y-4 text-center">
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block flex items-center justify-center gap-1.5">
+                      <QrCode className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Quét Mã QR Bằng Điện Thoại</span>
+                    </span>
+                    <p className="text-xs text-slate-300">
+                      Hướng camera điện thoại để tải trực tiếp không cần cáp nối
+                    </p>
+                  </div>
+
+                  {/* QR Code Container */}
+                  <div className="relative p-3 bg-white rounded-2xl shadow-xl ring-4 ring-emerald-500/20 flex items-center justify-center">
+                    {qrCodeDataUrl ? (
+                      <img
+                        src={qrCodeDataUrl}
+                        alt="QR Code Tải APK"
+                        className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded-lg"
+                      />
+                    ) : (
+                      <div className="w-44 h-44 sm:w-48 sm:h-48 flex flex-col items-center justify-center text-slate-400 gap-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                        <span className="text-xs">Đang tạo mã QR...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs">
+                    Mở ứng dụng <strong>Máy ảnh (Camera)</strong> hoặc <strong>Zalo</strong> trên điện thoại Android, quét mã trên để tải file APK về máy ngay lập tức.
+                  </p>
+                </div>
+              </div>
+
+              {/* 3-Step Installation Guide */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <h4 className="font-extrabold text-sm text-white">
+                    Hướng Dẫn Cài Đặt File APK Trên Điện Thoại Android (3 Bước Nhanh)
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center">
+                        1
+                      </span>
+                      <span className="font-bold text-xs text-white">Tải file APK</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Bấm nút <strong>&quot;Tải file APK&quot;</strong> hoặc quét mã QR ở trên để lưu tệp <span className="font-mono text-amber-300">NSTask-v2.5.apk</span> vào điện thoại.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-indigo-500 text-white font-black text-xs flex items-center justify-center">
+                        2
+                      </span>
+                      <span className="font-bold text-xs text-white">Mở tệp đã tải</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Vuốt thanh thông báo xuống hoặc vào ứng dụng <strong>&quot;Tệp / Quản lý tệp&quot;</strong> &rarr; chọn thư mục <strong>Downloads</strong> &rarr; nhấn vào file vừa tải.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center">
+                        3
+                      </span>
+                      <span className="font-bold text-xs text-white">Xác nhận cài đặt</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Nếu hệ thống hỏi <em>&quot;Cho phép cài đặt ứng dụng không rõ nguồn&quot;</em>, hãy bật <strong>Cho phép</strong>, sau đó nhấn <strong>Cài đặt</strong> để hoàn tất!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* ĐỒNG BỘ TÀI KHOẢN, QUẢN LÝ THIẾT BỊ & KẾT NỐI BỘ NHỚ (LÀM GỌN, BẤM VÀO MỚI XỔ XUỐNG) */}
         <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl text-white shadow-xl border border-indigo-900/50 overflow-hidden transition-all">
           <div

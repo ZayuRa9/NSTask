@@ -1,19 +1,19 @@
 [
   {
-    "id": "user_1793166046963_lmzr",
-    "username": "testuser2026",
-    "email": "hung.test@taskmaster.vn",
-    "password": "password123",
+    "id": "user_1794298633876_u5qt",
+    "username": "testuser1",
+    "email": "test1@example.com",
+    "password": "Password123",
     "authProvider": "password",
     "isProfileCompleted": true,
-    "syncCode": "TM-9UYG",
+    "syncCode": "TM-NG7P",
     "profile": {
-      "displayName": "Nguyễn Văn Hưng",
+      "displayName": "testuser1",
       "role": "",
       "units": [],
       "birthDate": "1995-01-01",
-      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=testuser2026",
-      "email": "hung.test@taskmaster.vn",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=testuser1",
+      "email": "test1@example.com",
       "phone": "",
       "weeklyGoal": 3,
       "notifications": {
@@ -24,25 +24,25 @@
       },
       "connectedAppsList": []
     },
-    "createdAt": "2026-10-28T05:40:46.963Z",
-    "lastActiveAt": "2026-10-28T05:45:06.758Z",
-    "lastSyncedAt": "2026-10-28T05:45:06.758Z"
+    "createdAt": "2026-11-10T08:17:13.876Z",
+    "lastActiveAt": "2026-11-10T08:17:18.762Z",
+    "lastSyncedAt": "2026-11-10T08:17:13.876Z"
   },
   {
-    "id": "user_1793167152660_yqn0",
-    "username": "canbo_nguyen",
-    "email": "canbo_nguyen@domain.vn",
-    "password": "Matkhau123!",
+    "id": "user_1794299054806_i4ca",
+    "username": "soan_ng2026",
+    "email": "ngsoanng@gmail.com",
+    "password": "Password@2026",
     "authProvider": "password",
     "isProfileCompleted": true,
-    "syncCode": "TM-2UQ3",
+    "syncCode": "TM-LGR3",
     "profile": {
-      "displayName": "Nguyễn Văn Tuấn",
+      "displayName": "Nguyễn Soạn",
       "role": "",
       "units": [],
       "birthDate": "1995-01-01",
-      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=canbo_nguyen",
-      "email": "canbo_nguyen@domain.vn",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=soan_ng2026",
+      "email": "ngsoanng@gmail.com",
       "phone": "",
       "weeklyGoal": 3,
       "notifications": {
@@ -53,25 +53,25 @@
       },
       "connectedAppsList": []
     },
-    "createdAt": "2026-10-28T05:59:12.660Z",
-    "lastActiveAt": "2026-10-28T05:59:24.933Z",
-    "lastSyncedAt": "2026-10-28T05:59:12.660Z"
+    "createdAt": "2026-11-10T08:24:14.806Z",
+    "lastActiveAt": "2026-11-10T08:29:49.462Z",
+    "lastSyncedAt": "2026-11-10T08:29:49.462Z"
   },
   {
-    "id": "user_1793316211178_hcya",
-    "username": "canbo_demo",
-    "email": "canbo_demo@test.com",
-    "password": "Password123!",
+    "id": "user_1794299426557_hylg",
+    "username": "soan_cb2026",
+    "email": "soan.nguyen@quanly.vn",
+    "password": "Password@2026",
     "authProvider": "password",
     "isProfileCompleted": true,
-    "syncCode": "TM-7HKV",
+    "syncCode": "TM-5UTE",
     "profile": {
-      "displayName": "Nguyễn Văn Tuấn",
+      "displayName": "Nguyễn Soạn",
       "role": "",
       "units": [],
       "birthDate": "1995-01-01",
-      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=canbo_demo",
-      "email": "canbo_demo@test.com",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=soan_cb2026",
+      "email": "soan.nguyen@quanly.vn",
       "phone": "",
       "weeklyGoal": 3,
       "notifications": {
@@ -82,25 +82,25 @@
       },
       "connectedAppsList": []
     },
-    "createdAt": "2026-10-29T23:23:31.178Z",
-    "lastActiveAt": "2026-10-29T23:23:31.178Z",
-    "lastSyncedAt": "2026-10-29T23:23:31.178Z"
+    "createdAt": "2026-11-10T08:30:26.557Z",
+    "lastActiveAt": "2026-11-10T08:31:16.317Z",
+    "lastSyncedAt": "2026-11-10T08:31:16.317Z"
   },
   {
-    "id": "user_1793316291529_xgj8",
-    "username": "nguyenvana",
-    "email": "nguyenvanan@test.vn",
-    "password": "Password123!",
+    "id": "user_1794403196525_urwq",
+    "username": "soan_auth2026",
+    "email": "soan.auth@quanly.vn",
+    "password": "Password@2026",
     "authProvider": "password",
     "isProfileCompleted": true,
-    "syncCode": "TM-HLVQ",
+    "syncCode": "TM-7LUG",
     "profile": {
-      "displayName": "Nguyễn Văn An",
+      "displayName": "Nguyễn Soạn",
       "role": "",
       "units": [],
       "birthDate": "1995-01-01",
-      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=nguyenvana",
-      "email": "nguyenvanan@test.vn",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=soan_auth2026",
+      "email": "soan.auth@quanly.vn",
       "phone": "",
       "weeklyGoal": 3,
       "notifications": {
@@ -111,25 +111,25 @@
       },
       "connectedAppsList": []
     },
-    "createdAt": "2026-10-29T23:24:51.529Z",
-    "lastActiveAt": "2026-10-30T10:46:26.678Z",
-    "lastSyncedAt": "2026-10-29T23:24:51.529Z"
+    "createdAt": "2026-11-11T13:19:56.525Z",
+    "lastActiveAt": "2026-11-11T13:20:15.218Z",
+    "lastSyncedAt": "2026-11-11T13:20:15.218Z"
   },
   {
-    "id": "user_1793370279625_u6ak",
-    "username": "demo_user",
-    "email": "demo@taskmaster.vn",
-    "password": "password123",
+    "id": "user_1794403953913_lrbc",
+    "username": "admin_user",
+    "email": "admin@nstask.vn",
+    "password": "Admin@123456",
     "authProvider": "password",
     "isProfileCompleted": true,
-    "syncCode": "TM-FUDB",
+    "syncCode": "TM-YEQ5",
     "profile": {
-      "displayName": "Nguyễn Văn Tuấn",
+      "displayName": "Nguyễn Văn Admin",
       "role": "",
       "units": [],
       "birthDate": "1995-01-01",
-      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=demo_user",
-      "email": "demo@taskmaster.vn",
+      "avatarUrl": "https://api.dicebear.com/7.x/initials/svg?seed=admin_user",
+      "email": "admin@nstask.vn",
       "phone": "",
       "weeklyGoal": 3,
       "notifications": {
@@ -140,8 +140,8 @@
       },
       "connectedAppsList": []
     },
-    "createdAt": "2026-10-30T14:24:39.625Z",
-    "lastActiveAt": "2026-10-30T14:24:55.091Z",
-    "lastSyncedAt": "2026-10-30T14:24:39.625Z"
+    "createdAt": "2026-11-11T13:32:33.913Z",
+    "lastActiveAt": "2026-11-11T13:33:14.259Z",
+    "lastSyncedAt": "2026-11-11T13:33:14.259Z"
   }
 ]

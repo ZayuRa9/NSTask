@@ -1965,7 +1965,25 @@ function cleanupInactiveAccounts() {
   let deletedCount = 0;
 
   for (const [userId, user] of serverUsers.entries()) {
-    const lastActiveTime = new Date(user.lastActiveAt || user.lastSyncedAt || user.createdAt).getTime();
+    // 1. Guard against missing or corrupt timestamps
+    const rawTime = user.lastActiveAt || user.lastSyncedAt || user.createdAt;
+    if (!rawTime) {
+      user.lastActiveAt = new Date().toISOString();
+      continue;
+    }
+    const lastActiveTime = new Date(rawTime).getTime();
+    if (isNaN(lastActiveTime)) {
+      user.lastActiveAt = new Date().toISOString();
+      continue;
+    }
+
+    // 2. Safety lock: NEVER delete accounts created within the last 7 days
+    const createdTime = user.createdAt ? new Date(user.createdAt).getTime() : now;
+    if (!isNaN(createdTime) && now - createdTime < 7 * 24 * 60 * 60 * 1000) {
+      continue;
+    }
+
+    // 3. Purge only if inactive > 3 days
     if (now - lastActiveTime > INACTIVITY_LIMIT_MS) {
       console.log(`[Account Cleanup] Deleting inactive user: ${user.username} (${userId}) - Inactive > 3 days`);
       serverUsers.delete(userId);
@@ -2024,13 +2042,28 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     const cleanEmail = email.trim().toLowerCase();
 
     for (const u of serverUsers.values()) {
-      if (u.username.toLowerCase() === cleanUser || u.email.toLowerCase() === cleanEmail) {
+      const uName = (u.username || '').trim().toLowerCase();
+      const uEmail = (u.email || '').trim().toLowerCase();
+      if (uName === cleanUser || uEmail === cleanEmail || (req.body.id && u.id === req.body.id)) {
+        // If matching account has the same password or same id, treat as successful sync/login
+        if (u.password === password || (req.body.id && u.id === req.body.id)) {
+          u.lastActiveAt = new Date().toISOString();
+          savePersistedUsers(serverUsers);
+          return res.json({
+            success: true,
+            user: toPublicUser(u),
+            tasks: serverTasksByUserId.get(u.id) || [],
+          });
+        }
         return res.status(409).json({ error: 'Tên đăng nhập hoặc email đã tồn tại trên hệ thống' });
       }
     }
 
     const nowIso = new Date().toISOString();
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const userId =
+      typeof req.body.id === 'string' && req.body.id.trim()
+        ? req.body.id.trim()
+        : `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const syncCode = generateSyncCode();
 
     const newAccount: ServerUserAccount = {
@@ -2096,7 +2129,9 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     let foundUser: ServerUserAccount | null = null;
 
     for (const u of serverUsers.values()) {
-      if (u.username === cleanInput || u.email === cleanInput) {
+      const uName = (u.username || '').trim().toLowerCase();
+      const uEmail = (u.email || '').trim().toLowerCase();
+      if (uName === cleanInput || uEmail === cleanInput) {
         if (u.password === password) {
           foundUser = u;
           break;
@@ -4345,6 +4380,57 @@ QUY TẮC BẮT BUỘC (CRITICAL):
       summary: `Hoàn tất các chỉ tiêu nhiệm vụ trong kỳ ${req.body.periodLabel || ''} với tỷ lệ đúng hạn ${req.body.statistics?.onTimeRate || 100}%.`,
     });
   }
+});
+
+/**
+ * =========================================================================
+ * 5.7. Mobile APK Download & Information Endpoints
+ * =========================================================================
+ */
+app.get('/api/download/apk', (_req: Request, res: Response) => {
+  const apkPath = path.resolve(__dirname, 'public/downloads/NSTask-v2.5.apk');
+  if (fs.existsSync(apkPath)) {
+    res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    res.setHeader('Content-Disposition', 'attachment; filename="NSTask-v2.5.apk"');
+    const stat = fs.statSync(apkPath);
+    res.setHeader('Content-Length', stat.size);
+    const readStream = fs.createReadStream(apkPath);
+    return readStream.pipe(res);
+  }
+  return res.status(404).json({ error: 'Tệp APK chưa được khởi tạo. Vui lòng thử lại sau.' });
+});
+
+app.get('/api/app/apk-info', (_req: Request, res: Response) => {
+  const apkPath = path.resolve(__dirname, 'public/downloads/NSTask-v2.5.apk');
+  const exists = fs.existsSync(apkPath);
+  const size = exists ? fs.statSync(apkPath).size : 2444;
+
+  return res.json({
+    version: '2.5.0',
+    versionCode: 25,
+    packageId: 'com.nstask.management',
+    appName: 'NSTask - Quản Lý Nhiệm Vụ',
+    fileName: 'NSTask-v2.5.apk',
+    downloadUrl: '/api/download/apk',
+    fileSize: size,
+    formattedSize: size > 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${(size / 1024).toFixed(1)} KB`,
+    minAndroid: 'Android 8.0+ (API 26)',
+    targetAndroid: 'Android 14 (API 34)',
+    lastUpdated: '11/11/2026',
+    features: [
+      'Đồng bộ dữ liệu hai chiều với Web & Cloud Firestore',
+      'Hỗ trợ chế độ ngoại tuyến hoàn toàn khi mất mạng',
+      'Nhắc việc và chuông cảnh báo đúng hẹn',
+      'Giao diện tối ưu hóa cho màn hình cảm ứng điện thoại',
+      'Hỗ trợ nhận diện giọng nói tiếng Việt chuyên nghiệp',
+    ],
+    instructions: [
+      'Nhấn nút "Tải file APK (Android)" hoặc quét mã QR bằng camera điện thoại',
+      'Mở tệp NSTask-v2.5.apk vừa tải trong mục Tệp đã tải xuống (Downloads)',
+      'Nếu xuất hiện thông báo bảo mật, chọn "Cài đặt nguồn này" (Cho phép nguồn không xác định)',
+      'Nhấn "Cài đặt" và mở ứng dụng NSTask để bắt đầu sử dụng',
+    ],
+  });
 });
 
 /**
